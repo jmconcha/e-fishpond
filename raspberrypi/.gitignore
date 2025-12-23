@@ -1,5 +1,2 @@
-venv/bin/
-venv/include/
-venv/lib/
-venv/lib64/
+venv/
 service_account_key.json

@@ -34,7 +34,7 @@ export default function TabLayout() {
         name="sensors"
         options={{
           title: 'Sensors',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="checkmark.circle.fill" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
         }}
       />
     </Tabs>

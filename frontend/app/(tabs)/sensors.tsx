@@ -1,6 +1,7 @@
 import { StyleSheet } from 'react-native';
 import { useEffect, useState } from 'react';
-import { initializeApp } from 'firebase/app';
+// import { initializeApp } from 'firebase/app';
+import { database } from '@/firebase';
 import { getDatabase, ref, onValue } from 'firebase/database';
 
 import ParallaxScrollView from '@/components/parallax-scroll-view';
@@ -10,25 +11,25 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Fonts } from '@/constants/theme';
 
 // Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyC-YOUR_API_KEY",
-  authDomain: "e-fishpond.firebaseapp.com",
-  databaseURL: "https://e-fishpond-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "e-fishpond",
-  storageBucket: "e-fishpond.appspot.com",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
-};
+// const firebaseConfig = {
+//   apiKey: "AIzaSyC-YOUR_API_KEY",
+//   authDomain: "e-fishpond.firebaseapp.com",
+//   databaseURL: "https://e-fishpond-default-rtdb.asia-southeast1.firebasedatabase.app",
+//   projectId: "e-fishpond",
+//   storageBucket: "e-fishpond.appspot.com",
+//   messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+//   appId: "YOUR_APP_ID"
+// };
 
 // Initialize Firebase
-let app: any;
-try {
-  app = initializeApp(firebaseConfig);
-} catch (error) {
-  console.log('Firebase already initialized');
-}
+// let app: any;
+// try {
+//   app = initializeApp(firebaseConfig);
+// } catch (error) {
+//   console.log('Firebase already initialized');
+// }
 
-const database = getDatabase(app);
+// const database = getDatabase(app);
 
 interface SensorData {
   value: number;

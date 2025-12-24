@@ -24,17 +24,31 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="ph-detail"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          title: 'pH Level',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} imageSource={require('@/assets/images/ph-optimal.png')} />,
         }}
       />
       <Tabs.Screen
-        name="sensors"
+        name="temperature-detail"
         options={{
-          title: 'Sensors',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          title: 'Temperature',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} imageSource={require('@/assets/images/temp-up.png')} />,
+        }}
+      />
+      <Tabs.Screen
+        name="oxygen-detail"
+        options={{
+          title: 'Oxygen',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} imageSource={require('@/assets/images/o2-optimal.png')} />,
+        }}
+      />
+      <Tabs.Screen
+        name="feeder-detail"
+        options={{
+          title: 'Feeder',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} imageSource={require('@/assets/images/fish-feeder.png')} />,
         }}
       />
     </Tabs>

@@ -1,98 +1,296 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import {
+  StyleSheet,
+  ScrollView,
+  View,
+  Pressable,
+} from 'react-native';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'expo-router';
+import { database } from '@/firebase';
+import { ref, onValue } from 'firebase/database';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
-export default function HomeScreen() {
+interface SensorData {
+  value: number;
+  unit: string;
+}
+
+interface SensorMetric {
+  id: string;
+  label: string;
+  icon?: string;
+  imageSource?: any;
+  value: SensorData | null;
+  loading: boolean;
+}
+
+export default function SensorsScreen() {
+  const colorScheme = useColorScheme();
+  const router = useRouter();
+  const [phLevel, setPhLevel] = useState<SensorData | null>(null);
+  const [waterTemp, setWaterTemp] = useState<SensorData | null>(null);
+  const [dissolvedOxygen, setDissolvedOxygen] = useState<SensorData | null>(
+    null
+  );
+  const [nextFeedTime, setNextFeedTime] = useState<string>('4:00 PM');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Fetch pH Level
+    const phRef = ref(database, '/sensors/ph_level');
+    const unsubscribePh = onValue(phRef, (snapshot) => {
+      if (snapshot.exists()) {
+        setPhLevel(snapshot.val());
+      }
+      setLoading(false);
+    });
+
+    // Fetch Water Temperature
+    const tempRef = ref(database, '/sensors/water_temperature');
+    const unsubscribeTemp = onValue(tempRef, (snapshot) => {
+      if (snapshot.exists()) {
+        setWaterTemp(snapshot.val());
+      }
+    });
+
+    // Fetch Dissolved Oxygen
+    const oxygenRef = ref(database, '/sensors/dissolved_oxygen');
+    const unsubscribeOxygen = onValue(oxygenRef, (snapshot) => {
+      if (snapshot.exists()) {
+        setDissolvedOxygen(snapshot.val());
+      }
+    });
+
+    // Fetch Next Feed Time
+    const feedRef = ref(database, '/feeder/next_feed_time');
+    const unsubscribeFeed = onValue(feedRef, (snapshot) => {
+      if (snapshot.exists()) {
+        setNextFeedTime(snapshot.val());
+      }
+    });
+
+    // Cleanup listeners on unmount
+    return () => {
+      unsubscribePh();
+      unsubscribeTemp();
+      unsubscribeOxygen();
+      unsubscribeFeed();
+    };
+  }, []);
+
+  const metrics: SensorMetric[] = [
+    {
+      id: 'ph',
+      label: 'pH Level',
+      imageSource: require('@/assets/images/ph-optimal.png'),
+      value: phLevel,
+      loading,
+    },
+    {
+      id: 'temp',
+      label: 'Water Temperature',
+      imageSource: require('@/assets/images/temp-optimal.png'),
+      value: waterTemp,
+      loading,
+    },
+    {
+      id: 'oxygen',
+      label: 'Dissolved Oxygen',
+      imageSource: require('@/assets/images/o2-optimal.png'),
+      value: dissolvedOxygen,
+      loading,
+    },
+    {
+      id: 'feeder',
+      label: 'Automated Fish Feeder',
+      imageSource: require('@/assets/images/fish-feeder.png'),
+      value: null,
+      loading: false,
+    },
+  ];
+
+  const iconColor = colorScheme === 'dark' ? '#4A90E2' : '#1F5BA8';
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: colorScheme === 'dark' ? '#151718' : '#F8F9FA' },
+      ]}
+    >
+      {/* Header */}
+      <View style={styles.header}>
+        <ThemedText type="title" style={styles.headerTitle}>
+          e-FishPond
         </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+      </View>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
+      {/* Metrics Container */}
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.contentContainer}
+      >
+        {/* Water Quality Title */}
+        <ThemedText type="title" style={styles.sectionTitle}>
+          Water Quality
         </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+        {metrics.map((metric) => {
+          const isTappable = ['ph', 'temp', 'oxygen', 'feeder'].includes(
+            metric.id
+          );
+          const navigationMap: { [key: string]: string } = {
+            ph: 'ph-detail',
+            temp: 'temperature-detail',
+            oxygen: 'oxygen-detail',
+            feeder: 'feeder-detail',
+          };
+
+          return (
+            <Pressable
+              key={metric.id}
+              onPress={() => {
+                if (isTappable) {
+                  router.push(`/${navigationMap[metric.id]}`);
+                }
+              }}
+              style={styles.metricCardTouchable}
+            >
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.metricCard,
+                    {
+                      backgroundColor: pressed
+                        ? colorScheme === 'dark'
+                          ? '#3A3A3A'
+                          : '#F0F0F0'
+                        : colorScheme === 'dark'
+                        ? '#252627'
+                        : '#FFFFFF',
+                    },
+                  ]}
+                >
+                  <View style={styles.metricLeft}>
+                    <IconSymbol
+                      size={40}
+                      color={metric.imageSource ? undefined : iconColor}
+                      name={metric.icon}
+                      imageSource={metric.imageSource}
+                      style={styles.metricIcon}
+                    />
+                    <View style={styles.metricLabels}>
+                      <ThemedText style={styles.metricLabel}>
+                        {metric.label}
+                      </ThemedText>
+                      {metric.id === 'feeder' && (
+                        <ThemedText style={styles.metricSubLabel}>
+                          Next Feed: {nextFeedTime}
+                        </ThemedText>
+                      )}
+                    </View>
+                  </View>
+                  <View style={styles.metricRight}>
+                    {metric.loading ? (
+                      <ThemedText style={styles.metricValue}>--</ThemedText>
+                    ) : metric.value ? (
+                      <ThemedText style={styles.metricValue}>
+                        {metric.value.value}
+                        {metric.value.unit}
+                      </ThemedText>
+                    ) : metric.id === 'feeder' ? (
+                      <View />
+                    ) : (
+                      <ThemedText style={styles.metricValue}>
+                        No data
+                      </ThemedText>
+                    )}
+                  </View>
+                </View>
+              )}
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
+  container: {
+    flex: 1,
+  },
+  header: {
+    paddingVertical: 50,
+    backgroundColor: '#1F5BA8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    color: '#FFFFFF',
+    fontSize: 56,
+    fontWeight: '600',
+    textAlign: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  contentContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 24,
+    paddingBottom: 100,
+  },
+  metricCardTouchable: {
+    marginBottom: 12,
+  },
+  metricCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  metricLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    flex: 1,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  metricIcon: {
+    marginRight: 16,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  metricLabels: {
+    flex: 1,
+  },
+  metricLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  metricSubLabel: {
+    fontSize: 13,
+    opacity: 0.7,
+  },
+  metricRight: {
+    alignItems: 'flex-end',
+  },
+  metricValue: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  sectionTitle: {
+    fontSize: 24,
+    fontWeight: '600',
+    marginBottom: 16,
   },
 });

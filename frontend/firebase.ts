@@ -1,4 +1,5 @@
 // Import the functions you need from the SDKs you need
+import "dotenv/config";
 import { initializeApp } from "firebase/app";
 import { getDatabase } from "firebase/database";
 // TODO: Add SDKs for Firebase products that you want to use
@@ -6,7 +7,7 @@ import { getDatabase } from "firebase/database";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyAN_24YoeOkLkl2ELKf_USZtTtMJ6ddGSQ",
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
   authDomain: "e-fishpond.firebaseapp.com",
   databaseURL: "https://e-fishpond-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "e-fishpond",

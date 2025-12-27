@@ -51,6 +51,13 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <IconSymbol size={28} imageSource={require('@/assets/images/fish-feeder.png')} />,
         }}
       />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.fill" color={color} />,
+        }}
+      />
     </Tabs>
   );
 }

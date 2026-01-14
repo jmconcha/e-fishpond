@@ -26,6 +26,7 @@ const MAPPING = {
   'temperature.low.fill': { icon: 'temperature-low', family: 'fontawesome5' },
   'oxygen.fill': { icon: 'arrow-up-from-water-pump', family: 'fontawesome6' },
   'fish.fill': { icon: 'fish', family: 'fontawesome5' },
+  'person.fill': { icon: 'user-circle', family: 'fontawesome5' },
 } as IconMapping;
 
 /**

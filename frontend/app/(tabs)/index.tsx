@@ -1,15 +1,13 @@
-import React from 'react';
 import {
   StyleSheet,
   ScrollView,
   View,
   Pressable,
 } from 'react-native';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { database } from '@/firebase';
 import { ref, onValue } from 'firebase/database';
-
 import { ThemedText } from '@/components/themed-text';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useColorScheme } from '@/hooks/use-color-scheme';

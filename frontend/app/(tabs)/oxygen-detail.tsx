@@ -1,6 +1,5 @@
-import React from 'react';
 import { StyleSheet, View, ScrollView, TouchableOpacity } from 'react-native';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { database } from '@/firebase';
 import { ref, onValue } from 'firebase/database';

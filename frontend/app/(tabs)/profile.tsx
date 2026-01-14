@@ -1,4 +1,6 @@
+import React from 'react';
 import { StyleSheet, TouchableOpacity, View, Alert } from 'react-native';
+import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors } from '@/constants/theme';
@@ -9,6 +11,7 @@ import { auth } from '@/firebase';
 
 export default function ProfileScreen() {
   const colorScheme = useColorScheme();
+  const router = useRouter();
   const { user } = useAuth();
   const colors = Colors[colorScheme ?? 'light'];
 
@@ -20,6 +23,8 @@ export default function ProfileScreen() {
         onPress: async () => {
           try {
             await signOut(auth);
+            // Navigate to login after logout
+            router.replace('/login');
           } catch (error: any) {
             Alert.alert('Error', error.message || 'Failed to logout');
           }

@@ -1,6 +1,13 @@
 import firebase_admin
 from firebase_admin import credentials, db
 import time
+import serial
+import json
+import sys
+
+# Serial connection settings
+SERIAL_PORT = '/dev/ttyUSB0'
+BAUD_RATE = 9600
 
 # Load credentials
 cred = credentials.Certificate("./service_account_key.json")
@@ -10,46 +17,87 @@ firebase_admin.initialize_app(cred, {
     'databaseURL': 'https://e-fishpond-default-rtdb.asia-southeast1.firebasedatabase.app/'
 })
 
-# Define callback functions for real-time updates
-# def on_ph_level_update(message):
-#     print(f"[pH Level] Updated: {message.data}")
+def connect_arduino():
+    """Connect to Arduino via USB serial port"""
+    try:
+        ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
+        time.sleep(2)  # Wait for connection to establish
+        print(f"Connected to Arduino on {SERIAL_PORT}")
+        return ser
+    except serial.SerialException as e:
+        print(f"Error connecting to Arduino: {e}")
+        print("Make sure Arduino is connected and port is correct")
+        return None
 
-# def on_water_temperature_update(message):
-#     print(f"[Water Temperature] Updated: {message.data}")
+def process_sensor_data(data):
+    """Process and validate sensor data from Arduino"""
+    try:
+        parsed = json.loads(data)
+        
+        if "error" in parsed:
+            print(f"[Arduino Error] {parsed['error']}")
+            return False
+        
+        if "temp" in parsed:
+            temp = parsed['temp']
+            heater = parsed['heater']
+            
+            # Update Firebase with temperature data
+            ref = db.reference('/sensors/water_temperature')
+            ref.set({
+                'value': temp,
+                'unit': '°C',
+                'timestamp': int(time.time())
+            })
+            
+            # Update heater status
+            heater_ref = db.reference('/devices/heater')
+            heater_ref.set({
+                'status': 'ON' if heater else 'OFF',
+                'timestamp': int(time.time())
+            })
+            
+            print(f"[Sensor Data] Temp: {temp}°C | Heater: {'ON' if heater else 'OFF'}")
+            return True
+            
+    except json.JSONDecodeError:
+        print(f"[Error] Invalid JSON received: {data}")
+        return False
+    except Exception as e:
+        print(f"[Error] Failed to process data: {e}")
+        return False
 
-# def on_dissolved_oxygen_update(message):
-    # print(f"[Dissolved Oxygen] Updated: {message.data}")
+def main():
+    """Main loop to read from Arduino and update Firebase"""
+    ser = connect_arduino()
+    
+    if ser is None:
+        print("Failed to connect to Arduino. Exiting.")
+        sys.exit(1)
+    
+    print("Listening for sensor data from Arduino...")
+    
+    try:
+        while True:
+            if ser.in_waiting:
+                try:
+                    line = ser.readline().decode('utf-8').strip()
+                    if line:
+                        process_sensor_data(line)
+                except UnicodeDecodeError:
+                    print("[Warning] Failed to decode serial data")
+            else:
+                time.sleep(0.1)
+                
+    except KeyboardInterrupt:
+        print("\nShutting down...")
+        ser.close()
+        sys.exit(0)
+    except Exception as e:
+        print(f"[Error] {e}")
+        ser.close()
+        sys.exit(1)
 
-# Set up real-time listeners for each sensor
-# db.reference('/sensors/ph_level').listen(on_ph_level_update)
-# db.reference('/sensors/water_temperature').listen(on_water_temperature_update)
-# db.reference('/sensors/dissolved_oxygen').listen(on_dissolved_oxygen_update)
+if __name__ == "__main__":
+    main()
 
-# print("Listeners started. Waiting for updates...")
-
-# Send initial data
-ref = db.reference('/sensors/dissolved_oxygen')
-ref.set({
-    'value': 3.0,
-    'unit': 'mg/L'
-})
-
-ref = db.reference('/sensors/water_temperature')
-ref.set({
-    'value': 2,
-    'unit': '°C'
-})
-
-ref = db.reference('/sensors/ph_level')
-ref.set({
-    'value': 1,
-    'unit': 'pH'
-})
-
-# Keep the program running to listen for real-time updates
-# try:
-#     while True:
-#         time.sleep(1)
-# except KeyboardInterrupt:
-#     print("\nShutting down...")
-#     exit()

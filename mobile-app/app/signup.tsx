@@ -7,7 +7,8 @@ import { ThemedView } from '@/components/themed-view';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '@/firebase';
+import { auth, database } from '@/firebase';
+import { ref, set } from 'firebase/database';
 
 export default function SignUpScreen() {
   const [email, setEmail] = useState('');
@@ -41,9 +42,23 @@ export default function SignUpScreen() {
 
     setLoading(true);
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
-      Alert.alert('Success', 'Account created successfully!');
-      router.replace('/(tabs)');
+      // Create user with Firebase Auth
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const uid = userCredential.user.uid;
+
+      // Create user object in Realtime Database
+      const userRef = ref(database, `/users/${uid}`);
+      await set(userRef, {
+        email: email,
+        firstname: '',
+        lastname: '',
+        profile_pic: '',
+        role: 'operator',
+        user_status: 'pending',
+      });
+
+      Alert.alert('Success', 'Account created successfully! Awaiting admin approval.');
+      router.replace('/login');
     } catch (error: any) {
       Alert.alert('Sign Up Failed', error.message || 'An error occurred');
     } finally {

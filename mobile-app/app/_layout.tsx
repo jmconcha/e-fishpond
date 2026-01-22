@@ -18,6 +18,10 @@ function RootLayoutNav() {
   console.log('RootLayoutNav - user:', user?.email, 'loading:', loading, 'isAdmin:', isAdmin);
 
   useEffect(() => {
+    if (!user) {
+      router.replace('/login');
+    }
+
     if (!loading && user && isAdmin) {
       // Force navigation to admin if user is admin
       router.replace('/(admin)');

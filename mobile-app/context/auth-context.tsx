@@ -31,6 +31,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               const isUserAdmin = userData.role === 'admin';
               console.log('User role:', userData.role, 'Is admin:', isUserAdmin);
               setIsAdmin(isUserAdmin);
+              setUser({ ...user, ...userData});
             } else {
               console.log('User document not found');
               setIsAdmin(false);

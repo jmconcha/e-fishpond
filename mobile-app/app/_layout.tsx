@@ -1,8 +1,8 @@
-import React from 'react';
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
+import React, { useEffect } from 'react';
+import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { Stack, useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View } from 'react-native';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -11,7 +11,21 @@ import { Colors } from '@/constants/theme';
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
-  const { user, loading } = useAuth();
+  const { user, loading, isAdmin } = useAuth();
+  const router = useRouter();
+  
+  console.log("🚀 ~ RootLayoutNav ~ isAdmin:", isAdmin)
+  console.log('RootLayoutNav - user:', user?.email, 'loading:', loading, 'isAdmin:', isAdmin);
+
+  useEffect(() => {
+    if (!loading && user && isAdmin) {
+      // Force navigation to admin if user is admin
+      router.replace('/(admin)');
+    } else if (!loading && user && !isAdmin) {
+      // Force navigation to operator if user is not admin
+      router.replace('/(operator)');
+    }
+  }, [user, isAdmin, loading, router]);
 
   if (loading) {
     return (
@@ -24,13 +38,15 @@ function RootLayoutNav() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack screenOptions={{ headerShown: false }}>
-        {user ? (
-          <Stack.Screen name="(tabs)" />
-        ) : (
+        {!user ? (
           <>
-            <Stack.Screen name="login" />
-            <Stack.Screen name="signup" />
+            <Stack.Screen name="login" options={{ headerShown: false }} />
+            <Stack.Screen name="signup" options={{ headerShown: false }} />
           </>
+        ) : isAdmin ? (
+          <Stack.Screen name="(admin)" options={{ headerShown: false }} />
+        ) : (
+          <Stack.Screen name="(operator)" options={{ headerShown: false }} />
         )}
       </Stack>
       <StatusBar style="auto" />
@@ -39,7 +55,7 @@ function RootLayoutNav() {
 }
 
 export const unstable_settings = {
-  anchor: '(tabs)',
+  initialRouteName: 'login',
 };
 
 export default function RootLayout() {

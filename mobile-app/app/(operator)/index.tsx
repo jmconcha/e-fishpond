@@ -11,6 +11,7 @@ import { ref, onValue } from 'firebase/database';
 import { ThemedText } from '@/components/themed-text';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAuth } from '@/context/auth-context';
 
 interface SensorData {
   value: number;
@@ -28,7 +29,15 @@ interface SensorMetric {
 
 export default function SensorsScreen() {
   const colorScheme = useColorScheme();
+  const { isAdmin } = useAuth();
   const router = useRouter();
+
+  // Guard: Redirect admin users
+  useEffect(() => {
+    if (isAdmin) {
+      router.replace('/(admin)');
+    }
+  }, [isAdmin, router]);
   const [phLevel, setPhLevel] = useState<SensorData | null>(null);
   const [waterTemp, setWaterTemp] = useState<SensorData | null>(null);
   const [dissolvedOxygen, setDissolvedOxygen] = useState<SensorData | null>(

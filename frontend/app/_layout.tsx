@@ -1,3 +1,4 @@
+import React from 'react';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -22,9 +23,15 @@ function RootLayoutNav() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="login" options={{ headerShown: false }} />
-        <Stack.Screen name="signup" options={{ headerShown: false }} />
+      <Stack screenOptions={{ headerShown: false }}>
+        {user ? (
+          <Stack.Screen name="(tabs)" />
+        ) : (
+          <>
+            <Stack.Screen name="login" />
+            <Stack.Screen name="signup" />
+          </>
+        )}
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>

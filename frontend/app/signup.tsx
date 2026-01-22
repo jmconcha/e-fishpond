@@ -1,3 +1,4 @@
+import React from 'react';
 import { useState } from 'react';
 import { StyleSheet, TextInput, TouchableOpacity, View, Alert, ActivityIndicator, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -75,7 +76,7 @@ export default function SignUpScreen() {
           <View style={styles.inputGroup}>
             <ThemedText style={styles.label}>Email</ThemedText>
             <TextInput
-              style={[styles.input, { borderColor: colors.tint }]}
+              style={[styles.input, { borderColor: colors.tint, color: colors.text, backgroundColor: colorScheme === 'dark' ? '#262829' : '#fff' }]}
               placeholder="Enter your email"
               placeholderTextColor={colors.tabIconDefault}
               value={email}
@@ -89,7 +90,7 @@ export default function SignUpScreen() {
           <View style={styles.inputGroup}>
             <ThemedText style={styles.label}>Password</ThemedText>
             <TextInput
-              style={[styles.input, { borderColor: colors.tint }]}
+              style={[styles.input, { borderColor: colors.tint, color: colors.text, backgroundColor: colorScheme === 'dark' ? '#262829' : '#fff' }]}
               placeholder="Enter your password"
               placeholderTextColor={colors.tabIconDefault}
               value={password}
@@ -105,7 +106,7 @@ export default function SignUpScreen() {
           <View style={styles.inputGroup}>
             <ThemedText style={styles.label}>Confirm Password</ThemedText>
             <TextInput
-              style={[styles.input, { borderColor: colors.tint }]}
+              style={[styles.input, { borderColor: colors.tint, color: colors.text, backgroundColor: colorScheme === 'dark' ? '#262829' : '#fff' }]}
               placeholder="Confirm your password"
               placeholderTextColor={colors.tabIconDefault}
               value={confirmPassword}
@@ -122,7 +123,7 @@ export default function SignUpScreen() {
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <ThemedText style={styles.signupButtonText}>Create Account</ThemedText>
+              <ThemedText style={[styles.signupButtonText, { color: colorScheme === 'dark' ? '#262829' : '#fff' }]}>Create Account</ThemedText>
             )}
           </TouchableOpacity>
         </View>

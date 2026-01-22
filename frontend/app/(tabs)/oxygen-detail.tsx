@@ -1,5 +1,5 @@
 import { StyleSheet, View, ScrollView, TouchableOpacity } from 'react-native';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { database } from '@/firebase';
 import { ref, onValue } from 'firebase/database';
@@ -13,14 +13,22 @@ interface SensorData {
   unit: string;
 }
 
+interface DeviceStatus {
+  status: boolean;
+}
+
 export default function OxygenDetailScreen() {
   const colorScheme = useColorScheme();
   const router = useRouter();
   const [dissolvedOxygen, setDissolvedOxygen] = useState<SensorData | null>(null);
+  const [aeratorStatus, setAeratorStatus] = useState<boolean | null>(null);
+  const [aeratorTimestamp, setAeratorTimestamp] = useState<string>('--');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const oxygenRef = ref(database, '/sensors/dissolved_oxygen');
+    const aeratorRef = ref(database, '/devices/aerator');
+    
     const unsubscribeOxygen = onValue(oxygenRef, (snapshot) => {
       if (snapshot.exists()) {
         setDissolvedOxygen(snapshot.val());
@@ -28,8 +36,23 @@ export default function OxygenDetailScreen() {
       setLoading(false);
     });
 
+    const unsubscribeAerator = onValue(aeratorRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.val() as DeviceStatus;
+        setAeratorStatus(data.status);
+        const now = new Date();
+        setAeratorTimestamp(now.toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true,
+        }));
+      }
+    });
+
     return () => {
       unsubscribeOxygen();
+      unsubscribeAerator();
     };
   }, []);
 
@@ -80,6 +103,35 @@ export default function OxygenDetailScreen() {
 
           {/* Optimal Range */}
           <ThemedText style={styles.optimalText}>Optimal: 5.0 - 8.0 mg/L</ThemedText>
+        </View>
+
+        {/* Device Status Section */}
+        <View style={[
+          styles.statusCard,
+          { backgroundColor: colorScheme === 'dark' ? '#252627' : '#FFFFFF' }
+        ]}>
+          <ThemedText type="defaultSemiBold" style={styles.statusCardTitle}>
+            Oxygen Control Devices
+          </ThemedText>
+
+          {/* Aerator Status */}
+          <View style={styles.deviceRow}>
+            <View style={styles.deviceInfo}>
+              <View style={styles.deviceNameRow}>
+                <IconSymbol size={18} imageSource={require('@/assets/images/aeration.png')} color="#2196F3" style={styles.deviceIcon} />
+                <ThemedText style={styles.deviceName}>Aerator</ThemedText>
+              </View>
+              <View style={styles.statusRow}>
+                <ThemedText style={[
+                  styles.deviceStatus,
+                  { color: aeratorStatus ? '#4CAF50' : '#FF6B6B' }
+                ]}>
+                  {aeratorStatus === null ? '--' : aeratorStatus ? 'ON' : 'OFF'}
+                </ThemedText>
+                <ThemedText style={styles.timestampText}>{aeratorTimestamp}</ThemedText>
+              </View>
+            </View>
+          </View>
         </View>
 
         {/* Info Section */}
@@ -164,6 +216,57 @@ const styles = StyleSheet.create({
   optimalText: {
     fontSize: 16,
     opacity: 0.7,
+  },
+  statusCard: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderRadius: 12,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  statusCardTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 16,
+  },
+  deviceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  deviceInfo: {
+    flex: 1,
+  },
+  deviceNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  deviceIcon: {
+    marginRight: 8,
+  },
+  deviceName: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  deviceStatus: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  timestampText: {
+    fontSize: 12,
+    opacity: 0.6,
   },
   infoSection: {
     paddingHorizontal: 16,

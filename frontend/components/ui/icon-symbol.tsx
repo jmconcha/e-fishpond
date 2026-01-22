@@ -1,5 +1,5 @@
 // Fallback for using MaterialIcons on Android and web.
-
+import React from 'react';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
@@ -8,14 +8,6 @@ import { SymbolWeight, SymbolViewProps } from 'expo-symbols';
 import { OpaqueColorValue, type StyleProp, type TextStyle } from 'react-native';
 
 type IconMapping = Record<SymbolViewProps['name'], { icon: string; family: 'material' | 'fontawesome5' | 'fontawesome6' }>;
-type IconSymbolName = keyof typeof MAPPING;
-
-/**
- * Add your SF Symbols to Material Icons or FontAwesome5 mappings here.
- * - see Material Icons in the [Icons Directory](https://icons.expo.fyi).
- * - see FontAwesome5 in the [FontAwesome Icon Directory](https://fontawesome.com/icons).
- * - see SF Symbols in the [SF Symbols](https://developer.apple.com/sf-symbols/) app.
- */
 const MAPPING = {
   'house.fill': { icon: 'home', family: 'material' },
   'paperplane.fill': { icon: 'send', family: 'material' },
@@ -26,7 +18,8 @@ const MAPPING = {
   'temperature.low.fill': { icon: 'temperature-low', family: 'fontawesome5' },
   'oxygen.fill': { icon: 'arrow-up-from-water-pump', family: 'fontawesome6' },
   'fish.fill': { icon: 'fish', family: 'fontawesome5' },
-} as IconMapping;
+  'person.fill': { icon: 'user-circle', family: 'fontawesome5' },
+} as const;
 
 /**
  * An icon component that uses native SF Symbols on iOS, Material Icons or FontAwesome5 on Android and web.
@@ -40,7 +33,7 @@ export function IconSymbol({
   style,
   imageSource,
 }: {
-  name?: IconSymbolName;
+  name?: IconMapping;
   size?: number;
   color?: string | OpaqueColorValue;
   style?: StyleProp<TextStyle>;

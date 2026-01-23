@@ -36,6 +36,13 @@ export default function AdminTabLayout() {
         }}
       />
       <Tabs.Screen
+        name="user-approval"
+        options={{
+          title: 'Users',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',

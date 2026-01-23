@@ -18,7 +18,7 @@ function RootLayoutNav() {
   console.log('RootLayoutNav - user:', user?.email, 'loading:', loading, 'isAdmin:', isAdmin);
 
   useEffect(() => {
-    if (!user) {
+    if (!loading && !user) {
       router.replace('/login');
     }
 

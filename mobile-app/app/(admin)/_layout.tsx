@@ -16,7 +16,10 @@ export default function AdminTabLayout() {
   if (!isAdmin) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color={Colors[colorScheme ?? 'light'].tint} />
+        <ActivityIndicator
+          size="large"
+          color={Colors[colorScheme ?? 'light'].tint}
+        />
       </View>
     );
   }
@@ -27,33 +30,42 @@ export default function AdminTabLayout() {
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         headerShown: false,
         tabBarButton: HapticTab,
-      }}>
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Admin',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="gearshape.fill" color={color} />,
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={28} name="house.fill" color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="user-approval"
         options={{
           title: 'Users',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.fill" color={color} />,
-        }}
-      />
-       <Tabs.Screen
-        name="device-management"
-        options={{
-          title: 'Devices',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.fill" color={color} />,
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={28} name="person.fill" color={color} />
+          ),
         }}
       />
       <Tabs.Screen
-        name="profile"
+        name="device-management"
         options={{
-          title: 'Profile',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.fill" color={color} />,
+          title: 'Devices',
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={28} name="devices.outline" color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: 'Settings',
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={26} name="user-gear.fill" color={color} />
+          ),
         }}
       />
     </Tabs>

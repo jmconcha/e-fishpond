@@ -19,7 +19,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-      
+
       if (currentUser) {
         // Check if user is admin
         const userRef = ref(database, `/users/${currentUser.uid}`);
@@ -29,11 +29,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (snapshot.exists()) {
               const userData = snapshot.val();
               const isUserAdmin = userData.role === 'admin';
-              console.log('User role:', userData.role, 'Is admin:', isUserAdmin);
               setIsAdmin(isUserAdmin);
-              setUser({ ...user, ...userData});
+              setUser({ ...user, ...userData });
             } else {
-              console.log('User document not found');
               setIsAdmin(false);
             }
             setLoading(false);
@@ -42,9 +40,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             console.error('Error checking admin role:', error);
             setIsAdmin(false);
             setLoading(false);
-          }
+          },
         );
-        
+
         // Return the unsubscribe function for cleanup
         return () => {
           unsubscribeUser();

@@ -16,7 +16,10 @@ export default function OperatorTabLayout() {
   if (isAdmin) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color={Colors[colorScheme ?? 'light'].tint} />
+        <ActivityIndicator
+          size="large"
+          color={Colors[colorScheme ?? 'light'].tint}
+        />
       </View>
     );
   }
@@ -27,47 +30,72 @@ export default function OperatorTabLayout() {
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         headerShown: false,
         tabBarButton: HapticTab,
-      }}>
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={28} name="house.fill" color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="ph-detail"
         options={{
           title: 'pH Level',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} imageSource={require('@/assets/images/ph-optimal.png')} />,
+          tabBarIcon: ({ color }) => (
+            <IconSymbol
+              size={28}
+              imageSource={require('@/assets/images/ph-optimal.png')}
+            />
+          ),
         }}
       />
       <Tabs.Screen
         name="temperature-detail"
         options={{
           title: 'Temperature',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} imageSource={require('@/assets/images/temp-up.png')} />,
+          tabBarIcon: ({ color }) => (
+            <IconSymbol
+              size={28}
+              imageSource={require('@/assets/images/temp-up.png')}
+            />
+          ),
         }}
       />
       <Tabs.Screen
         name="oxygen-detail"
         options={{
           title: 'Oxygen',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} imageSource={require('@/assets/images/o2-optimal.png')} />,
+          tabBarIcon: ({ color }) => (
+            <IconSymbol
+              size={28}
+              imageSource={require('@/assets/images/o2-optimal.png')}
+            />
+          ),
         }}
       />
       <Tabs.Screen
         name="feeder-detail"
         options={{
           title: 'Feeder',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} imageSource={require('@/assets/images/fish-feeder.png')} />,
+          tabBarIcon: ({ color }) => (
+            <IconSymbol
+              size={28}
+              imageSource={require('@/assets/images/fish-feeder.png')}
+            />
+          ),
         }}
       />
       <Tabs.Screen
-        name="profile"
+        name="settings"
         options={{
-          title: 'Profile',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.fill" color={color} />,
+          title: 'Settings',
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={26} name="user-gear.fill" color={color} />
+          ),
         }}
       />
     </Tabs>

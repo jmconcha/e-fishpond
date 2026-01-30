@@ -1,6 +1,10 @@
 import 'react-native-reanimated';
 import React, { useEffect } from 'react';
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import {
+  DarkTheme,
+  DefaultTheme,
+  ThemeProvider,
+} from '@react-navigation/native';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View } from 'react-native';
@@ -13,9 +17,6 @@ function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const { user, loading, isAdmin } = useAuth();
   const router = useRouter();
-  
-  console.log("🚀 ~ RootLayoutNav ~ isAdmin:", isAdmin)
-  console.log('RootLayoutNav - user:', user?.email, 'loading:', loading, 'isAdmin:', isAdmin);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -34,7 +35,10 @@ function RootLayoutNav() {
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color={Colors[colorScheme ?? 'light'].tint} />
+        <ActivityIndicator
+          size="large"
+          color={Colors[colorScheme ?? 'light'].tint}
+        />
       </View>
     );
   }

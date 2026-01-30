@@ -1,5 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, View, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import {
+  StyleSheet,
+  View,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+} from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { database } from '@/firebase';
@@ -13,9 +19,26 @@ interface Stats {
   totalDevices: number;
 }
 
+interface DeviceSettings {
+  is_sched_editable: boolean;
+  last_updated?: string;
+  status?: 'online' | 'offline' | 'error' | 'restarting' | 'power_off';
+  power_state?: 'on' | 'off';
+  battery_level?: number;
+  firmware_version?: string;
+  temperature?: number;
+  current_setting?: string;
+  last_power_change?: string;
+  online: boolean;
+}
+
 export default function AdminDashboardScreen() {
   const colorScheme = useColorScheme();
-  const [stats, setStats] = useState<Stats>({ pendingUsers: 0, onlineDevices: 0, totalDevices: 2 });
+  const [stats, setStats] = useState<Stats>({
+    pendingUsers: 0,
+    onlineDevices: 0,
+    totalDevices: 0,
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -25,44 +48,37 @@ export default function AdminDashboardScreen() {
       if (snapshot.exists()) {
         const data = snapshot.val();
         let pendingCount = 0;
-        
+
         Object.values(data).forEach((userData: any) => {
           if (userData.user_status === 'pending') {
             pendingCount++;
           }
         });
-        
-        setStats(prev => ({ ...prev, pendingUsers: pendingCount }));
+
+        setStats((prev) => ({ ...prev, pendingUsers: pendingCount }));
       }
     });
 
     // Fetch device stats
-    const cleanerRef = ref(database, '/devices/cleaner');
-    const feederRef = ref(database, '/devices/feeder');
-    
-    let onlineCount = 0;
-    
-    const unsubscribeCleaner = onValue(cleanerRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.val();
-        if (data.status === 'online') onlineCount++;
-        setStats(prev => ({ ...prev, onlineDevices: onlineCount }));
-      }
-    });
+    const devicesRef = ref(database, '/devices');
 
-    const unsubscribeFeeder = onValue(feederRef, (snapshot) => {
+    const unsubscribeDevices = onValue(devicesRef, (snapshot) => {
       if (snapshot.exists()) {
-        const data = snapshot.val();
-        if (data.status === 'online') onlineCount++;
-        setStats(prev => ({ ...prev, onlineDevices: onlineCount }));
+        const devices: DeviceSettings = snapshot.val();
+        setStats((prev) => ({
+          ...prev,
+          onlineDevices: Object.values(devices).filter(
+            (device) => device.online,
+          ).length,
+          totalDevices: Object.keys(devices).length,
+        }));
       }
       setLoading(false);
     });
 
     return () => {
       unsubscribeUsers();
-      unsubscribeCleaner();
-      unsubscribeFeeder();
+      unsubscribeDevices();
     };
   }, []);
 
@@ -73,7 +89,7 @@ export default function AdminDashboardScreen() {
       icon: 'people',
       color: '#1F5BA8',
       link: '/(admin)/user-approval',
-      count: stats.pendingUsers
+      count: stats.pendingUsers,
     },
     {
       title: 'Device Management',
@@ -81,7 +97,7 @@ export default function AdminDashboardScreen() {
       icon: 'hardware-chip',
       color: '#4CAF50',
       link: '/(admin)/device-management',
-      count: null
+      count: null,
     },
     {
       title: 'System Logs',
@@ -89,7 +105,7 @@ export default function AdminDashboardScreen() {
       icon: 'document-text',
       color: '#FF9800',
       link: '/admin/logs',
-      count: null
+      count: null,
     },
     {
       title: 'Settings',
@@ -97,12 +113,17 @@ export default function AdminDashboardScreen() {
       icon: 'settings',
       color: '#9C27B0',
       link: '/admin/settings',
-      count: null
-    }
+      count: null,
+    },
   ];
 
   return (
-    <View style={[styles.container, { backgroundColor: colorScheme === 'dark' ? '#151718' : '#F8F9FA' }]}>
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: colorScheme === 'dark' ? '#151718' : '#F8F9FA' },
+      ]}
+    >
       {/* Header */}
       <View style={styles.header}>
         <ThemedText type="title" style={styles.headerTitle}>
@@ -113,39 +134,60 @@ export default function AdminDashboardScreen() {
         </ThemedText>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
         {/* Stats Overview */}
         <View style={styles.section}>
           <ThemedText type="defaultSemiBold" style={styles.sectionTitle}>
             System Overview
           </ThemedText>
-          
+
           {loading ? (
-            <ThemedText style={styles.loadingText}>Loading system stats...</ThemedText>
+            <ThemedText style={styles.loadingText}>
+              Loading system stats...
+            </ThemedText>
           ) : (
             <View style={styles.statsGrid}>
-              <View style={[styles.statCard, { backgroundColor: colorScheme === 'dark' ? '#252627' : '#FFFFFF' }]}>
-                <View style={[styles.statIcon, { backgroundColor: '#1F5BA820' }]}>
+              <View
+                style={[
+                  styles.statCard,
+                  {
+                    backgroundColor:
+                      colorScheme === 'dark' ? '#252627' : '#FFFFFF',
+                  },
+                ]}
+              >
+                <View
+                  style={[styles.statIcon, { backgroundColor: '#1F5BA820' }]}
+                >
                   <Ionicons name="person-add" size={20} color="#1F5BA8" />
                 </View>
                 <ThemedText type="title" style={styles.statValue}>
                   {stats.pendingUsers}
                 </ThemedText>
-                <ThemedText style={styles.statLabel}>
-                  Pending Users
-                </ThemedText>
+                <ThemedText style={styles.statLabel}>Pending Users</ThemedText>
               </View>
 
-              <View style={[styles.statCard, { backgroundColor: colorScheme === 'dark' ? '#252627' : '#FFFFFF' }]}>
-                <View style={[styles.statIcon, { backgroundColor: '#4CAF5020' }]}>
+              <View
+                style={[
+                  styles.statCard,
+                  {
+                    backgroundColor:
+                      colorScheme === 'dark' ? '#252627' : '#FFFFFF',
+                  },
+                ]}
+              >
+                <View
+                  style={[styles.statIcon, { backgroundColor: '#4CAF5020' }]}
+                >
                   <Ionicons name="hardware-chip" size={20} color="#4CAF50" />
                 </View>
                 <ThemedText type="title" style={styles.statValue}>
                   {stats.onlineDevices}/{stats.totalDevices}
                 </ThemedText>
-                <ThemedText style={styles.statLabel}>
-                  Devices Online
-                </ThemedText>
+                <ThemedText style={styles.statLabel}>Devices Online</ThemedText>
               </View>
             </View>
           )}
@@ -163,28 +205,49 @@ export default function AdminDashboardScreen() {
           <View style={styles.actionsGrid}>
             {quickActions.map((action) => (
               <Link href={action.link as any} key={action.title} asChild>
-                <TouchableOpacity 
-                  style={[styles.actionCard, { backgroundColor: colorScheme === 'dark' ? '#252627' : '#FFFFFF' }]}
+                <TouchableOpacity
+                  style={[
+                    styles.actionCard,
+                    {
+                      backgroundColor:
+                        colorScheme === 'dark' ? '#252627' : '#FFFFFF',
+                    },
+                  ]}
                 >
-                  <View style={[styles.actionIcon, { backgroundColor: `${action.color}20` }]}>
-                    <Ionicons name={action.icon as any} size={24} color={action.color} />
+                  <View
+                    style={[
+                      styles.actionIcon,
+                      { backgroundColor: `${action.color}20` },
+                    ]}
+                  >
+                    <Ionicons
+                      name={action.icon as any}
+                      size={24}
+                      color={action.color}
+                    />
                     {action.count !== null && action.count > 0 && (
                       <View style={styles.badge}>
-                        <ThemedText style={styles.badgeText}>{action.count}</ThemedText>
+                        <ThemedText style={styles.badgeText}>
+                          {action.count}
+                        </ThemedText>
                       </View>
                     )}
                   </View>
-                  
+
                   <ThemedText type="defaultSemiBold" style={styles.actionTitle}>
                     {action.title}
                   </ThemedText>
-                  
+
                   <ThemedText style={styles.actionDescription}>
                     {action.description}
                   </ThemedText>
-                  
+
                   <View style={styles.actionArrow}>
-                    <Ionicons name="arrow-forward" size={16} color={action.color} />
+                    <Ionicons
+                      name="arrow-forward"
+                      size={16}
+                      color={action.color}
+                    />
                   </View>
                 </TouchableOpacity>
               </Link>

@@ -42,6 +42,13 @@ export default function AdminTabLayout() {
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.fill" color={color} />,
         }}
       />
+       <Tabs.Screen
+        name="device-management"
+        options={{
+          title: 'Devices',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.fill" color={color} />,
+        }}
+      />
       <Tabs.Screen
         name="profile"
         options={{

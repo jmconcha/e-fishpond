@@ -64,7 +64,7 @@ export default function AdminTabLayout() {
         options={{
           title: 'Settings',
           tabBarIcon: ({ color }) => (
-            <IconSymbol size={26} name="user-gear.fill" color={color} />
+            <IconSymbol size={22} name="user-gear.fill" color={color} />
           ),
         }}
       />

@@ -90,11 +90,23 @@ export default function OperatorTabLayout() {
         }}
       />
       <Tabs.Screen
+        name="cleaner-detail"
+        options={{
+          title: 'Cleaner',
+          tabBarIcon: ({ color }) => (
+            <IconSymbol
+              size={28}
+              imageSource={require('@/assets/images/recycle-water.png')}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="settings"
         options={{
           title: 'Settings',
           tabBarIcon: ({ color }) => (
-            <IconSymbol size={26} name="user-gear.fill" color={color} />
+            <IconSymbol size={22} name="user-gear.fill" color={color} />
           ),
         }}
       />

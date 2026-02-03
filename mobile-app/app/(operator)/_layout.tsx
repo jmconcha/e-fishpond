@@ -96,7 +96,7 @@ export default function OperatorTabLayout() {
           tabBarIcon: ({ color }) => (
             <IconSymbol
               size={28}
-              imageSource={require('@/assets/images/recycle-water.png')}
+              imageSource={require('@/assets/images/water-cleaning.png')}
             />
           ),
         }}

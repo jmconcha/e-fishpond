@@ -602,7 +602,7 @@ export default function WaterCleaningScreen() {
             <IconSymbol
               size={100}
               color="#1F5BA8"
-              imageSource={require('@/assets/images/recycle-water.png')}
+              imageSource={require('@/assets/images/water-cleaning.png')}
               style={styles.mainIcon}
             />
           </View>

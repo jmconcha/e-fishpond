@@ -44,7 +44,6 @@ export default function FeederDetailScreen() {
     is_schedule_editable: false,
     status: 'idle',
   });
-  console.log('🚀 ~ FeederDetailScreen ~ feederData:', feederData);
 
   const [nextFeedTime, setNextFeedTime] = useState<string>('Not scheduled');
   const [loading, setLoading] = useState(true);

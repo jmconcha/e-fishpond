@@ -34,16 +34,17 @@ export default function PHDetailScreen() {
   }, []);
 
   return (
-    <View style={[styles.container, { backgroundColor: colorScheme === 'dark' ? '#151718' : '#F8F9FA' }]}>
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: colorScheme === 'dark' ? '#151718' : '#F8F9FA' },
+      ]}
+    >
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <IconSymbol size={24} name="chevron.left" color="#FFFFFF" />
-        </TouchableOpacity>
         <ThemedText type="title" style={styles.headerTitle}>
-          e-FishPond
+          pH Level
         </ThemedText>
-        <View style={styles.backButton} />
       </View>
 
       {/* Content */}
@@ -52,14 +53,13 @@ export default function PHDetailScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.contentContainer}
       >
-        {/* Title */}
-        <ThemedText type="title" style={styles.sectionTitle}>pH Level</ThemedText>
-
         {/* Main Card */}
-        <View style={[
-          styles.mainCard,
-          { backgroundColor: colorScheme === 'dark' ? '#252627' : '#FFFFFF' }
-        ]}>
+        <View
+          style={[
+            styles.mainCard,
+            { backgroundColor: colorScheme === 'dark' ? '#252627' : '#FFFFFF' },
+          ]}
+        >
           {/* Icon */}
           <View style={styles.iconContainer}>
             <IconSymbol
@@ -88,7 +88,9 @@ export default function PHDetailScreen() {
             About pH Level
           </ThemedText>
           <ThemedText style={styles.infoText}>
-            pH measures how acidic or alkaline the water is. A neutral pH is 7.0. Fish and plants thrive in slightly alkaline to neutral water conditions.
+            pH measures how acidic or alkaline the water is. A neutral pH is
+            7.0. Fish and plants thrive in slightly alkaline to neutral water
+            conditions.
           </ThemedText>
         </View>
       </ScrollView>
@@ -118,6 +120,9 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 28,
     fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 20,
+    width: '100%',
   },
   scrollView: {
     flex: 1,

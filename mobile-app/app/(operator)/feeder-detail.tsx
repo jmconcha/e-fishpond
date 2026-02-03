@@ -1,46 +1,479 @@
-import { StyleSheet, View, ScrollView, TouchableOpacity } from 'react-native';
-import React, { useEffect, useState } from 'react';
+import {
+  StyleSheet,
+  View,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  Modal,
+  Alert,
+  Switch,
+} from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { database } from '@/firebase';
-import { ref, onValue } from 'firebase/database';
+import { ref, onValue, push, set, update, remove } from 'firebase/database';
 
 import { ThemedText } from '@/components/themed-text';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { Ionicons } from '@expo/vector-icons';
 
 interface FeederData {
   next_feed_time?: string;
+  is_schedule_editable?: boolean;
+  status?: 'idle' | 'feeding' | 'maintenance' | 'error';
+}
+
+interface FeedingSchedule {
+  id: string;
+  run_at: string; // ISO datetime
+  repeat_daily: boolean; // if true, repeats every day at the chosen time
+  enabled: boolean;
+  created_at: string;
+  updated_at?: string;
+  device?: 'feeder';
 }
 
 export default function FeederDetailScreen() {
   const colorScheme = useColorScheme();
   const router = useRouter();
-  const [nextFeedTime, setNextFeedTime] = useState<string>('4:00 PM');
+
+  const [feederData, setFeederData] = useState<FeederData>({
+    next_feed_time: 'Not scheduled',
+    is_schedule_editable: false,
+    status: 'idle',
+  });
+  console.log('🚀 ~ FeederDetailScreen ~ feederData:', feederData);
+
+  const [nextFeedTime, setNextFeedTime] = useState<string>('Not scheduled');
   const [loading, setLoading] = useState(true);
 
+  // schedules
+  const [schedules, setSchedules] = useState<FeedingSchedule[]>([]);
+
+  // modal/form
+  const [showAddSchedule, setShowAddSchedule] = useState(false);
+  const [editingScheduleId, setEditingScheduleId] = useState<string | null>(
+    null,
+  );
+  const [savingSchedule, setSavingSchedule] = useState(false);
+
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [selectedTime, setSelectedTime] = useState<Date>(new Date());
+  const [repeatDaily, setRepeatDaily] = useState<boolean>(false);
+
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+
   useEffect(() => {
-    const feedRef = ref(database, '/feeder/next_feed_time');
-    const unsubscribeFeed = onValue(feedRef, (snapshot) => {
+    const unsubFeeder = fetchFeederData();
+    const unsubSchedules = fetchSchedules();
+
+    return () => {
+      unsubFeeder?.();
+      unsubSchedules?.();
+    };
+  }, []);
+
+  const fetchFeederData = () => {
+    // Match the water cleaner pattern: read from a device node
+    const feederRef = ref(database, '/devices/feeder');
+    const unsubscribe = onValue(feederRef, (snapshot) => {
       if (snapshot.exists()) {
-        setNextFeedTime(snapshot.val());
+        const data = snapshot.val() || {};
+        setFeederData({
+          next_feed_time: data.next_feed_time || 'Not scheduled',
+          is_schedule_editable: data.is_sched_editable || false,
+          status: data.status || 'idle',
+        });
+        setNextFeedTime(data.next_feed_time || 'Not scheduled');
+      } else {
+        // fallback to old path if device node isn't present
+        const oldRef = ref(database, '/feeder/next_feed_time');
+        const unsubOld = onValue(oldRef, (snap) => {
+          if (snap.exists()) setNextFeedTime(snap.val());
+          setLoading(false);
+        });
+        return () => unsubOld();
       }
       setLoading(false);
     });
 
-    return () => {
-      unsubscribeFeed();
+    return unsubscribe;
+  };
+
+  const fetchSchedules = () => {
+    // keep schedules separate so it matches water cleaner structure
+    const schedulesRef = ref(database, '/feeding_schedules');
+    const unsubscribe = onValue(schedulesRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.val() || {};
+        const arr: FeedingSchedule[] = [];
+
+        Object.keys(data).forEach((key) => {
+          const s = data[key] || {};
+          arr.push({
+            id: key,
+            run_at: s.run_at || new Date().toISOString(),
+            repeat_daily: !!s.repeat_daily,
+            enabled: s.enabled !== false,
+            created_at: s.created_at || new Date().toISOString(),
+            updated_at: s.updated_at,
+            device: s.device || 'feeder',
+          });
+        });
+
+        setSchedules(arr);
+      } else {
+        setSchedules([]);
+      }
+    });
+
+    return unsubscribe;
+  };
+
+  const logFeedingAction = async (action: string, message: string) => {
+    try {
+      const logsRef = ref(database, '/feeding_logs');
+      await push(logsRef, {
+        action,
+        message,
+        timestamp: new Date().toISOString(),
+        performedBy: 'user',
+      });
+    } catch (error) {
+      console.error('Failed to log feeding action:', error);
+    }
+  };
+
+  const formatDateTime = (iso: string) => {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    return d.toLocaleString([], {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const formatTimeOnly = (d: Date) => {
+    return d.toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const combineDateAndTime = (datePart: Date, timePart: Date) => {
+    const d = new Date(datePart);
+    d.setHours(timePart.getHours(), timePart.getMinutes(), 0, 0);
+    return d;
+  };
+
+  // For daily repeat: next run is today at chosen time if still upcoming, else tomorrow.
+  const computeNextRunAt = (base: Date, repeatDailyFlag: boolean) => {
+    if (!repeatDailyFlag) return base;
+
+    const now = new Date();
+    const next = new Date(now);
+    next.setHours(base.getHours(), base.getMinutes(), 0, 0);
+
+    if (next.getTime() <= now.getTime()) {
+      next.setDate(next.getDate() + 1);
+    }
+    return next;
+  };
+
+  const resetScheduleForm = () => {
+    setSelectedDate(new Date());
+    setSelectedTime(new Date());
+    setRepeatDaily(false);
+    setEditingScheduleId(null);
+    setShowDatePicker(false);
+    setShowTimePicker(false);
+  };
+
+  const handleAddSchedule = async () => {
+    if (!feederData.is_schedule_editable) {
+      Alert.alert(
+        'Schedule Editing Disabled',
+        'Schedule editing is currently disabled by the administrator.',
+        [{ text: 'OK' }],
+      );
+      return;
+    }
+
+    setSavingSchedule(true);
+
+    try {
+      const combined = combineDateAndTime(selectedDate, selectedTime);
+      const runAt = computeNextRunAt(combined, repeatDaily);
+
+      if (!repeatDaily && runAt.getTime() < Date.now()) {
+        Alert.alert(
+          'Invalid Date/Time',
+          'Please choose a future date and time.',
+        );
+        setSavingSchedule(false);
+        return;
+      }
+
+      const schedulesRef = ref(database, '/feeding_schedules');
+      const newScheduleRef = push(schedulesRef);
+
+      const newSchedule = {
+        run_at: runAt.toISOString(),
+        repeat_daily: repeatDaily,
+        enabled: true,
+        created_at: new Date().toISOString(),
+        device: 'feeder',
+      };
+
+      await set(newScheduleRef, newSchedule);
+
+      await logFeedingAction(
+        'add_schedule',
+        `Added feeding schedule for ${formatDateTime(runAt.toISOString())}${
+          repeatDaily ? ' (repeats daily)' : ''
+        }`,
+      );
+
+      Alert.alert(
+        'Success',
+        `Feeding scheduled for ${formatDateTime(runAt.toISOString())}${
+          repeatDaily ? ' (repeats daily)' : ''
+        }`,
+      );
+
+      setShowAddSchedule(false);
+      resetScheduleForm();
+    } catch (error: any) {
+      console.error('Error adding schedule:', error);
+      Alert.alert('Error', `Failed to add schedule: ${error.message}`);
+    } finally {
+      setSavingSchedule(false);
+    }
+  };
+
+  const handleUpdateSchedule = async (scheduleId: string) => {
+    if (!feederData.is_schedule_editable) {
+      Alert.alert(
+        'Schedule Editing Disabled',
+        'Schedule editing is currently disabled by the administrator.',
+        [{ text: 'OK' }],
+      );
+      return;
+    }
+
+    setSavingSchedule(true);
+
+    try {
+      const combined = combineDateAndTime(selectedDate, selectedTime);
+      const runAt = computeNextRunAt(combined, repeatDaily);
+
+      if (!repeatDaily && runAt.getTime() < Date.now()) {
+        Alert.alert(
+          'Invalid Date/Time',
+          'Please choose a future date and time.',
+        );
+        setSavingSchedule(false);
+        return;
+      }
+
+      const scheduleRef = ref(database, `/feeding_schedules/${scheduleId}`);
+      await update(scheduleRef, {
+        run_at: runAt.toISOString(),
+        repeat_daily: repeatDaily,
+        updated_at: new Date().toISOString(),
+      });
+
+      await logFeedingAction(
+        'update_schedule',
+        `Updated feeding schedule to ${formatDateTime(runAt.toISOString())}${
+          repeatDaily ? ' (repeats daily)' : ''
+        }`,
+      );
+
+      Alert.alert(
+        'Success',
+        `Schedule updated to ${formatDateTime(runAt.toISOString())}${
+          repeatDaily ? ' (repeats daily)' : ''
+        }`,
+      );
+
+      setShowAddSchedule(false);
+      resetScheduleForm();
+    } catch (error: any) {
+      console.error('Error updating schedule:', error);
+      Alert.alert('Error', `Failed to update schedule: ${error.message}`);
+    } finally {
+      setSavingSchedule(false);
+    }
+  };
+
+  const handleToggleSchedule = async (scheduleId: string, enabled: boolean) => {
+    try {
+      const scheduleRef = ref(database, `/feeding_schedules/${scheduleId}`);
+      await update(scheduleRef, {
+        enabled: !enabled,
+        updated_at: new Date().toISOString(),
+      });
+
+      const schedule = schedules.find((s) => s.id === scheduleId);
+      await logFeedingAction(
+        'toggle_schedule',
+        `${!enabled ? 'Enabled' : 'Disabled'} schedule ${
+          schedule?.repeat_daily ? '(daily)' : ''
+        } for ${schedule ? formatDateTime(schedule.run_at) : scheduleId}`,
+      );
+
+      Alert.alert('Success', `Schedule ${!enabled ? 'enabled' : 'disabled'}`);
+    } catch (error: any) {
+      console.error('Error toggling schedule:', error);
+      Alert.alert('Error', `Failed to update schedule: ${error.message}`);
+    }
+  };
+
+  const handleDeleteSchedule = async (scheduleId: string) => {
+    Alert.alert(
+      'Delete Schedule',
+      'Are you sure you want to delete this feeding schedule?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const scheduleRef = ref(
+                database,
+                `/feeding_schedules/${scheduleId}`,
+              );
+              await remove(scheduleRef);
+
+              await logFeedingAction(
+                'delete_schedule',
+                `Deleted feeding schedule (${scheduleId})`,
+              );
+
+              Alert.alert('Success', 'Schedule deleted');
+            } catch (error: any) {
+              console.error('Error deleting schedule:', error);
+              Alert.alert(
+                'Error',
+                `Failed to delete schedule: ${error.message}`,
+              );
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const getNextScheduledFeeding = () => {
+    if (!schedules.length) return 'No schedule set';
+
+    const enabled = schedules.filter((s) => s.enabled);
+    if (!enabled.length) return 'No enabled schedules';
+
+    const now = new Date();
+
+    const nextDateForSchedule = (s: FeedingSchedule) => {
+      const base = new Date(s.run_at);
+      if (isNaN(base.getTime())) return null;
+
+      if (!s.repeat_daily) {
+        return base.getTime() > now.getTime() ? base : null;
+      }
+
+      const next = new Date(now);
+      next.setHours(base.getHours(), base.getMinutes(), 0, 0);
+      if (next.getTime() <= now.getTime()) next.setDate(next.getDate() + 1);
+      return next;
     };
-  }, []);
+
+    const candidates = enabled
+      .map((s) => ({ s, next: nextDateForSchedule(s) }))
+      .filter((x): x is { s: FeedingSchedule; next: Date } => !!x.next)
+      .sort((a, b) => a.next.getTime() - b.next.getTime());
+
+    if (!candidates.length) return 'No upcoming schedules';
+
+    const best = candidates[0];
+    return `${best.next.toLocaleString([], {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    })}${best.s.repeat_daily ? ' (daily)' : ''}`;
+  };
+
+  const scheduleList = useMemo(() => {
+    const now = new Date();
+    const nextFor = (s: FeedingSchedule) => {
+      const base = new Date(s.run_at);
+      if (isNaN(base.getTime())) return null;
+
+      if (!s.repeat_daily) return base;
+
+      const next = new Date(now);
+      next.setHours(base.getHours(), base.getMinutes(), 0, 0);
+      if (next.getTime() <= now.getTime()) next.setDate(next.getDate() + 1);
+      return next;
+    };
+
+    return [...schedules].sort((a, b) => {
+      const na = nextFor(a);
+      const nb = nextFor(b);
+      const ta = na ? na.getTime() : Number.MAX_SAFE_INTEGER;
+      const tb = nb ? nb.getTime() : Number.MAX_SAFE_INTEGER;
+      return ta - tb;
+    });
+  }, [schedules]);
+
+  const statusText = () => {
+    switch (feederData.status) {
+      case 'feeding':
+        return 'Feeding In Progress';
+      case 'maintenance':
+        return 'Maintenance Required';
+      case 'error':
+        return 'Error - Check System';
+      default:
+        return 'Feeder Active';
+    }
+  };
+
+  if (loading) {
+    return (
+      <View
+        style={[
+          styles.loadingContainer,
+          { backgroundColor: colorScheme === 'dark' ? '#151718' : '#F8F9FA' },
+        ]}
+      >
+        <ActivityIndicator size="large" color="#1F5BA8" />
+        <ThemedText style={styles.loadingText}>
+          Loading feeder data...
+        </ThemedText>
+      </View>
+    );
+  }
 
   return (
-    <View style={[styles.container, { backgroundColor: colorScheme === 'dark' ? '#151718' : '#F8F9FA' }]}>
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: colorScheme === 'dark' ? '#151718' : '#F8F9FA' },
+      ]}
+    >
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <IconSymbol size={24} name="chevron.left" color="#FFFFFF" />
-        </TouchableOpacity>
         <ThemedText type="title" style={styles.headerTitle}>
-          e-FishPond
+          Automated Fish Feeder
         </ThemedText>
         <View style={styles.backButton} />
       </View>
@@ -51,14 +484,13 @@ export default function FeederDetailScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.contentContainer}
       >
-        {/* Title */}
-        <ThemedText type="title" style={styles.sectionTitle}>Automated Fish Feeder</ThemedText>
-
         {/* Main Card */}
-        <View style={[
-          styles.mainCard,
-          { backgroundColor: colorScheme === 'dark' ? '#252627' : '#FFFFFF' }
-        ]}>
+        <View
+          style={[
+            styles.mainCard,
+            { backgroundColor: colorScheme === 'dark' ? '#252627' : '#FFFFFF' },
+          ]}
+        >
           {/* Icon */}
           <View style={styles.iconContainer}>
             <IconSymbol
@@ -70,16 +502,338 @@ export default function FeederDetailScreen() {
           </View>
 
           {/* Status */}
-          <ThemedText style={styles.statusText}>Feeder Active</ThemedText>
+          <ThemedText style={styles.statusText}>{statusText()}</ThemedText>
 
           {/* Value */}
           <ThemedText style={styles.valueText}>
-            {loading ? '--' : nextFeedTime}
+            {getNextScheduledFeeding()}
           </ThemedText>
 
-          {/* Optimal Range */}
-          <ThemedText style={styles.optimalText}>Next Scheduled Feed</ThemedText>
+          {/* Subtitle */}
+          <ThemedText style={styles.optimalText}>
+            Next Scheduled Feeding
+          </ThemedText>
         </View>
+
+        {/* Schedule Section */}
+        <View style={styles.scheduleSection}>
+          <View style={styles.sectionHeaderRow}>
+            <ThemedText type="defaultSemiBold" style={styles.scheduleTitle}>
+              Feeding Schedule
+            </ThemedText>
+
+            {feederData.is_schedule_editable && (
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={() => {
+                  resetScheduleForm();
+                  setShowAddSchedule(true);
+                }}
+              >
+                <Ionicons name="add-circle" size={20} color="#4CAF50" />
+                <ThemedText style={styles.addButtonText}>
+                  Add Schedule
+                </ThemedText>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <ThemedText style={styles.sectionSubtitle}>
+            Next scheduled feeding: {getNextScheduledFeeding()}
+          </ThemedText>
+
+          {scheduleList.length === 0 ? (
+            <View
+              style={[
+                styles.emptySchedule,
+                {
+                  backgroundColor:
+                    colorScheme === 'dark' ? '#252627' : '#FFFFFF',
+                },
+              ]}
+            >
+              <Ionicons name="calendar-outline" size={40} color="#999" />
+              <ThemedText style={styles.emptyScheduleText}>
+                {feederData.is_schedule_editable
+                  ? 'No feeding schedules set. Add one to get started.'
+                  : 'No feeding schedules available. Schedule editing is disabled.'}
+              </ThemedText>
+            </View>
+          ) : (
+            <View style={styles.schedulesList}>
+              {scheduleList.map((schedule) => (
+                <View
+                  key={schedule.id}
+                  style={[
+                    styles.scheduleCard,
+                    {
+                      backgroundColor:
+                        colorScheme === 'dark' ? '#252627' : '#FFFFFF',
+                    },
+                  ]}
+                >
+                  <View style={styles.scheduleHeader}>
+                    <View style={styles.scheduleInfo}>
+                      <ThemedText
+                        type="defaultSemiBold"
+                        style={styles.scheduleDay}
+                      >
+                        {schedule.repeat_daily
+                          ? 'Daily Schedule'
+                          : 'One-time Schedule'}
+                      </ThemedText>
+                      <ThemedText style={styles.scheduleTime}>
+                        {formatDateTime(schedule.run_at)}
+                        {schedule.repeat_daily ? ' (repeats daily)' : ''}
+                      </ThemedText>
+                    </View>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.scheduleToggle,
+                        {
+                          backgroundColor: schedule.enabled
+                            ? '#4CAF5020'
+                            : '#f4433620',
+                        },
+                      ]}
+                      onPress={() =>
+                        handleToggleSchedule(schedule.id, schedule.enabled)
+                      }
+                    >
+                      <Ionicons
+                        name={schedule.enabled ? 'toggle' : 'toggle-outline'}
+                        size={20}
+                        color={schedule.enabled ? '#4CAF50' : '#f44336'}
+                      />
+                      <ThemedText
+                        style={[
+                          styles.scheduleToggleText,
+                          { color: schedule.enabled ? '#4CAF50' : '#f44336' },
+                        ]}
+                      >
+                        {schedule.enabled ? 'ON' : 'OFF'}
+                      </ThemedText>
+                    </TouchableOpacity>
+                  </View>
+
+                  {feederData.is_schedule_editable && (
+                    <View style={styles.scheduleActions}>
+                      <TouchableOpacity
+                        style={styles.scheduleActionButton}
+                        onPress={() => {
+                          setEditingScheduleId(schedule.id);
+
+                          const dt = new Date(schedule.run_at);
+                          const safe = isNaN(dt.getTime()) ? new Date() : dt;
+
+                          setSelectedDate(safe);
+                          setSelectedTime(safe);
+                          setRepeatDaily(!!schedule.repeat_daily);
+
+                          setShowAddSchedule(true);
+                        }}
+                      >
+                        <Ionicons
+                          name="create-outline"
+                          size={16}
+                          color="#2196F3"
+                        />
+                        <ThemedText style={styles.scheduleActionText}>
+                          Edit
+                        </ThemedText>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.scheduleActionButton}
+                        onPress={() => handleDeleteSchedule(schedule.id)}
+                      >
+                        <Ionicons
+                          name="trash-outline"
+                          size={16}
+                          color="#f44336"
+                        />
+                        <ThemedText
+                          style={[
+                            styles.scheduleActionText,
+                            { color: '#f44336' },
+                          ]}
+                        >
+                          Delete
+                        </ThemedText>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* Add/Edit Schedule Modal */}
+        <Modal
+          visible={showAddSchedule}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => {
+            setShowAddSchedule(false);
+            resetScheduleForm();
+          }}
+        >
+          <View style={styles.modalOverlay}>
+            <View
+              style={[
+                styles.modalContent,
+                {
+                  backgroundColor:
+                    colorScheme === 'dark' ? '#252627' : '#FFFFFF',
+                },
+              ]}
+            >
+              <View style={styles.modalHeader}>
+                <ThemedText type="title" style={styles.modalTitle}>
+                  {editingScheduleId
+                    ? 'Edit Feeding Schedule'
+                    : 'Add Feeding Schedule'}
+                </ThemedText>
+
+                <TouchableOpacity
+                  style={styles.modalCloseButton}
+                  onPress={() => {
+                    setShowAddSchedule(false);
+                    resetScheduleForm();
+                  }}
+                >
+                  <Ionicons name="close" size={24} color="#666" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.formContainer}>
+                {/* Date Selection */}
+                <View style={styles.formGroup}>
+                  <ThemedText style={styles.formLabel}>Select Date</ThemedText>
+                  <TouchableOpacity
+                    style={[
+                      styles.timeInput,
+                      {
+                        backgroundColor:
+                          colorScheme === 'dark' ? '#1a1a1a' : '#F5F5F5',
+                      },
+                    ]}
+                    onPress={() => setShowDatePicker(true)}
+                  >
+                    <Ionicons name="calendar-outline" size={20} color="#666" />
+                    <ThemedText style={styles.timeInputText}>
+                      {selectedDate.toLocaleDateString()}
+                    </ThemedText>
+                  </TouchableOpacity>
+                </View>
+
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={selectedDate}
+                    mode="date"
+                    display="spinner"
+                    onChange={(event, date) => {
+                      setShowDatePicker(false);
+                      if (date) setSelectedDate(date);
+                    }}
+                  />
+                )}
+
+                {/* Time Selection */}
+                <View style={styles.formGroup}>
+                  <ThemedText style={styles.formLabel}>Select Time</ThemedText>
+                  <TouchableOpacity
+                    style={[
+                      styles.timeInput,
+                      {
+                        backgroundColor:
+                          colorScheme === 'dark' ? '#1a1a1a' : '#F5F5F5',
+                      },
+                    ]}
+                    onPress={() => setShowTimePicker(true)}
+                  >
+                    <Ionicons name="time-outline" size={20} color="#666" />
+                    <ThemedText style={styles.timeInputText}>
+                      {formatTimeOnly(selectedTime)}
+                    </ThemedText>
+                  </TouchableOpacity>
+                </View>
+
+                {showTimePicker && (
+                  <DateTimePicker
+                    value={selectedTime}
+                    mode="time"
+                    display="spinner"
+                    onChange={(event, date) => {
+                      setShowTimePicker(false);
+                      if (date) setSelectedTime(date);
+                    }}
+                  />
+                )}
+
+                {/* Repeat Daily */}
+                <View style={styles.repeatRow}>
+                  <View style={styles.repeatLabelWrap}>
+                    <ThemedText style={styles.formLabel}>
+                      Repeat every day
+                    </ThemedText>
+                    <ThemedText style={styles.repeatHint}>
+                      If enabled, feeding will run daily at the selected time.
+                    </ThemedText>
+                  </View>
+                  <Switch
+                    value={repeatDaily}
+                    onValueChange={setRepeatDaily}
+                    disabled={
+                      !feederData.is_schedule_editable || savingSchedule
+                    }
+                  />
+                </View>
+
+                {/* Submit */}
+                <TouchableOpacity
+                  style={[
+                    styles.submitButton,
+                    (!feederData.is_schedule_editable || savingSchedule) &&
+                      styles.submitButtonDisabled,
+                  ]}
+                  onPress={() =>
+                    editingScheduleId
+                      ? handleUpdateSchedule(editingScheduleId)
+                      : handleAddSchedule()
+                  }
+                  disabled={!feederData.is_schedule_editable || savingSchedule}
+                >
+                  {savingSchedule ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Ionicons
+                        name={editingScheduleId ? 'save-outline' : 'add-circle'}
+                        size={20}
+                        color="#FFFFFF"
+                      />
+                      <ThemedText style={styles.submitButtonText}>
+                        {editingScheduleId ? 'Update Schedule' : 'Add Schedule'}
+                      </ThemedText>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                {!feederData.is_schedule_editable && (
+                  <View style={styles.disabledWarning}>
+                    <Ionicons name="warning" size={16} color="#FF9800" />
+                    <ThemedText style={styles.disabledWarningText}>
+                      Schedule editing is disabled by administrator
+                    </ThemedText>
+                  </View>
+                )}
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         {/* Info Section */}
         <View style={styles.infoSection}>
@@ -87,7 +841,9 @@ export default function FeederDetailScreen() {
             About the Fish Feeder
           </ThemedText>
           <ThemedText style={styles.infoText}>
-            The automated fish feeder dispenses food at scheduled times to ensure consistent feeding. Proper feeding maintains fish health and nutrient cycling in your aquaponic system.
+            The automated fish feeder dispenses food at scheduled times to
+            ensure consistent feeding. Proper feeding maintains fish health and
+            nutrient cycling in your aquaponic system.
           </ThemedText>
         </View>
       </ScrollView>
@@ -96,9 +852,11 @@ export default function FeederDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
+
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { marginTop: 16, fontSize: 16, opacity: 0.7 },
+
   header: {
     flexDirection: 'row',
     paddingVertical: 40,
@@ -117,20 +875,20 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 28,
     fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 20,
+    width: '100%',
   },
-  scrollView: {
-    flex: 1,
-  },
+
+  scrollView: { flex: 1 },
   contentContainer: {
     paddingHorizontal: 16,
     paddingVertical: 24,
     paddingBottom: 100,
   },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-    marginBottom: 24,
-  },
+
+  sectionTitle: { fontSize: 24, fontWeight: '600', marginBottom: 24 },
+
   mainCard: {
     padding: 32,
     borderRadius: 16,
@@ -142,40 +900,173 @@ const styles = StyleSheet.create({
     elevation: 3,
     marginBottom: 24,
   },
-  iconContainer: {
-    marginBottom: 20,
-  },
-  mainIcon: {
-    width: 100,
-    height: 100,
-  },
-  statusText: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 16,
-  },
+  iconContainer: { marginBottom: 20 },
+  mainIcon: { width: 100, height: 100 },
+
+  statusText: { fontSize: 18, fontWeight: '600', marginBottom: 16 },
   valueText: {
-    fontSize: 48,
+    fontSize: 24,
     fontWeight: '700',
     marginBottom: 8,
     paddingVertical: 8,
+    textAlign: 'center',
   },
-  optimalText: {
-    fontSize: 16,
-    opacity: 0.7,
+  optimalText: { fontSize: 16, opacity: 0.7 },
+
+  scheduleSection: { marginBottom: 24 },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
-  infoSection: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+  scheduleTitle: { fontSize: 20, fontWeight: '600', color: '#333' },
+  sectionSubtitle: { fontSize: 14, opacity: 0.7, marginBottom: 16 },
+
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#F5F5F5',
   },
-  infoTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+  addButtonText: { fontSize: 12, fontWeight: '600', color: '#4CAF50' },
+
+  emptySchedule: {
+    padding: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  emptyScheduleText: {
+    marginTop: 12,
+    fontSize: 14,
+    opacity: 0.6,
+    textAlign: 'center',
+  },
+
+  schedulesList: { gap: 12 },
+  scheduleCard: {
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  scheduleHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 12,
   },
-  infoText: {
-    fontSize: 14,
-    lineHeight: 22,
-    opacity: 0.8,
+  scheduleInfo: { flex: 1 },
+  scheduleDay: { fontSize: 16, fontWeight: '600', marginBottom: 4 },
+  scheduleTime: { fontSize: 14, opacity: 0.7 },
+
+  scheduleToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
   },
+  scheduleToggleText: { fontSize: 12, fontWeight: '600' },
+
+  scheduleActions: {
+    flexDirection: 'row',
+    gap: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+  },
+  scheduleActionButton: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  scheduleActionText: { fontSize: 12, color: '#2196F3', fontWeight: '500' },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 24,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  modalTitle: { fontSize: 20, fontWeight: '600' },
+  modalCloseButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  formContainer: { gap: 20 },
+  formGroup: { gap: 8 },
+  formLabel: { fontSize: 14, fontWeight: '600', marginBottom: 8 },
+
+  timeInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 8,
+  },
+  timeInputText: { fontSize: 16, fontWeight: '500' },
+
+  repeatRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 4,
+  },
+  repeatLabelWrap: { flex: 1 },
+  repeatHint: { fontSize: 12, opacity: 0.7, marginTop: 2 },
+
+  submitButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 16,
+    borderRadius: 8,
+    backgroundColor: '#2196F3',
+    marginTop: 8,
+  },
+  submitButtonDisabled: { backgroundColor: '#9E9E9E', opacity: 0.6 },
+  submitButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
+
+  infoSection: { paddingHorizontal: 16, paddingVertical: 16 },
+  infoTitle: { fontSize: 18, fontWeight: '600', marginBottom: 12 },
+  infoText: { fontSize: 14, lineHeight: 22, opacity: 0.8 },
+
+  disabledWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#FFF3E0',
+    borderRadius: 8,
+  },
+  disabledWarningText: { fontSize: 12, color: '#FF9800', fontWeight: '500' },
 });

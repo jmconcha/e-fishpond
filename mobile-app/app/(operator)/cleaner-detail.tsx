@@ -16,6 +16,7 @@ import { ThemedText } from '@/components/themed-text';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 
 interface CleaningData {
   next_cleaning_time?: string;
@@ -537,6 +538,19 @@ export default function WaterCleaningScreen() {
     });
   }, [schedules]);
 
+  const statusText = () => {
+    switch (cleaningData.status) {
+      case 'cleaning':
+        return 'Feeding In Progress';
+      case 'maintenance':
+        return 'Maintenance Required';
+      case 'error':
+        return 'Error - Check System';
+      default:
+        return 'Feeder Active';
+    }
+  };
+
   if (loading) {
     return (
       <View
@@ -562,12 +576,6 @@ export default function WaterCleaningScreen() {
     >
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backButton}
-        >
-          <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
         <ThemedText type="title" style={styles.headerTitle}>
           Water Cleaning System
         </ThemedText>
@@ -584,77 +592,33 @@ export default function WaterCleaningScreen() {
         <View
           style={[
             styles.mainCard,
-            { backgroundColor: colorScheme === 'dark' ? '#252627' : '#FFFFFF' },
+            {
+              backgroundColor: colorScheme === 'dark' ? '#252627' : '#FFFFFF',
+            },
           ]}
         >
-          <View style={styles.statusHeader}>
-            <View style={styles.iconContainer}>
-              <Ionicons name="water" size={60} color="#2196F3" />
-            </View>
-            <View style={styles.statusContainer}>
-              <ThemedText style={styles.systemName}>
-                Automated Water Cleaner
-              </ThemedText>
-              <View
-                style={[
-                  styles.statusBadge,
-                  {
-                    backgroundColor: `${getStatusColor(cleaningData.status || 'idle')}20`,
-                  },
-                ]}
-              >
-                <View
-                  style={[
-                    styles.statusDot,
-                    {
-                      backgroundColor: getStatusColor(
-                        cleaningData.status || 'idle',
-                      ),
-                    },
-                  ]}
-                />
-                <ThemedText
-                  style={[
-                    styles.statusText,
-                    { color: getStatusColor(cleaningData.status || 'idle') },
-                  ]}
-                >
-                  {getStatusText(cleaningData.status || 'idle')}
-                </ThemedText>
-              </View>
-            </View>
+          {/* Icon */}
+          <View style={styles.iconContainer}>
+            <IconSymbol
+              size={100}
+              color="#1F5BA8"
+              imageSource={require('@/assets/images/recycle-water.png')}
+              style={styles.mainIcon}
+            />
           </View>
 
-          <View style={styles.controlButtons}>
-            {cleaningData.status === 'cleaning' ? (
-              <TouchableOpacity
-                style={[styles.controlButton, { backgroundColor: '#f44336' }]}
-                onPress={handleStopCleaning}
-              >
-                <Ionicons name="stop-circle" size={20} color="#FFFFFF" />
-                <ThemedText style={styles.controlButtonText}>
-                  Stop Cleaning
-                </ThemedText>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={[styles.controlButton, { backgroundColor: '#4CAF50' }]}
-                onPress={handleStartCleaning}
-                disabled={
-                  cleaningData.status === 'maintenance' ||
-                  cleaningData.status === 'error'
-                }
-              >
-                <Ionicons name="play-circle" size={20} color="#FFFFFF" />
-                <ThemedText style={styles.controlButtonText}>
-                  {cleaningData.status === 'maintenance' ||
-                  cleaningData.status === 'error'
-                    ? 'Cannot Start'
-                    : 'Start Cleaning'}
-                </ThemedText>
-              </TouchableOpacity>
-            )}
-          </View>
+          {/* Status */}
+          <ThemedText style={styles.statusText}>{statusText()}</ThemedText>
+
+          {/* Value */}
+          <ThemedText style={styles.valueText}>
+            {getNextScheduledCleaning()}
+          </ThemedText>
+
+          {/* Subtitle */}
+          <ThemedText style={styles.optimalText}>
+            Next Scheduled Cleaning
+          </ThemedText>
         </View>
 
         {/* Schedule Section */}
@@ -977,7 +941,21 @@ export default function WaterCleaningScreen() {
           </View>
         </Modal>
 
-        {/* (Optional) Info text - keep or remove */}
+        {/* Info Section */}
+        <View style={styles.infoSection}>
+          <ThemedText type="defaultSemiBold" style={styles.infoTitle}>
+            About the Water Cleaner
+          </ThemedText>
+          <ThemedText style={styles.infoText}>
+            The automated water cleaning system helps maintain healthy pond
+            conditions by circulating water through a filter to remove debris,
+            reduce buildup, and support stable water quality. Regular cleaning
+            schedules prevent waste accumulation that can cause foul odor, algae
+            growth, and stress to the fish. For best results, run cleaning
+            cycles consistently, monitor water clarity and filter condition, and
+            clean or replace filter media when performance drops.
+          </ThemedText>
+        </View>
       </ScrollView>
     </View>
   );
@@ -1002,7 +980,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerTitle: { color: '#FFFFFF', fontSize: 28, fontWeight: '600' },
+  headerTitle: {
+    color: '#FFFFFF',
+    fontSize: 28,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 20,
+    width: '100%',
+  },
 
   scrollView: { flex: 1 },
   contentContainer: {
@@ -1012,8 +997,9 @@ const styles = StyleSheet.create({
   },
 
   mainCard: {
-    padding: 24,
+    padding: 32,
     borderRadius: 16,
+    alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -1026,15 +1012,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 24,
   },
-  iconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#E3F2FD',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
+  iconContainer: { marginBottom: 20 },
   statusContainer: { flex: 1 },
   systemName: { fontSize: 18, fontWeight: '600', marginBottom: 8 },
   statusBadge: {
@@ -1047,7 +1025,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
-  statusText: { fontSize: 12, fontWeight: '600' },
+  statusText: { fontSize: 18, fontWeight: '600', marginBottom: 16 },
 
   controlButtons: { flexDirection: 'row', justifyContent: 'center' },
   controlButton: {
@@ -1214,4 +1192,17 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   disabledWarningText: { fontSize: 12, color: '#FF9800', fontWeight: '500' },
+
+  infoSection: { paddingHorizontal: 16, paddingVertical: 16 },
+  infoTitle: { fontSize: 18, fontWeight: '600', marginBottom: 12 },
+  infoText: { fontSize: 14, lineHeight: 22, opacity: 0.8 },
+  mainIcon: { width: 100, height: 100 },
+  valueText: {
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 8,
+    paddingVertical: 8,
+    textAlign: 'center',
+  },
+  optimalText: { fontSize: 16, opacity: 0.7 },
 });

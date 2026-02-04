@@ -44,6 +44,7 @@ export default function SensorsScreen() {
     null
   );
   const [nextFeedTime, setNextFeedTime] = useState<string>('4:00 PM');
+  const [nextCleanTime, setNextCleanTime] = useState<string>('6:00 PM');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -115,6 +116,13 @@ export default function SensorsScreen() {
       id: 'feeder',
       label: 'Automated Fish Feeder',
       imageSource: require('@/assets/images/fish-feeder.png'),
+      value: null,
+      loading: false,
+    },
+    {
+      id: 'cleaner',
+      label: 'Automated Water Cleaner',
+      imageSource: require('@/assets/images/water-cleaning.png'),
       value: null,
       loading: false,
     },
@@ -199,6 +207,11 @@ export default function SensorsScreen() {
                           Next Feed: {nextFeedTime}
                         </ThemedText>
                       )}
+                      {metric.id === 'cleaner' && (
+                        <ThemedText style={styles.metricSubLabel}>
+                          Next Cleaning: {nextCleanTime}
+                        </ThemedText>
+                      )}
                     </View>
                   </View>
                   <View style={styles.metricRight}>
@@ -209,7 +222,7 @@ export default function SensorsScreen() {
                         {metric.value.value}
                         {metric.value.unit}
                       </ThemedText>
-                    ) : metric.id === 'feeder' ? (
+                    ) : metric.id === 'feeder' || metric.id === 'cleaner' ? (
                       <View />
                     ) : (
                       <ThemedText style={styles.metricValue}>

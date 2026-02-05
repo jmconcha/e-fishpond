@@ -14,6 +14,10 @@ BAUD_RATE = 9600
 FEEDING_SCHEDULES_PATH = "/feeding_schedules"
 CLEANING_SCHEDULES_PATH = "/cleaning_schedules"
 
+# optimal range paths
+OPT_RANGE_DO_PATH = "/opt_range_do"
+OPT_RANGE_TEMP_PATH = "/opt_range_temp"
+
 # Load credentials
 cred = credentials.Certificate("./service_account_key.json")
 
@@ -29,6 +33,12 @@ firebase_admin.initialize_app(
 feeding_schedules_cache = {}
 cleaning_schedules_cache = {}
 
+# cache for optimal ranges
+opt_ranges_cache = {
+    "do": None,    # {"min": 0, "max": 0, "unit": ""}
+    "temp": None,  # {"min": 0, "max": 0, "unit": ""}
+}
+
 
 def connect_arduino():
     """Connect to Arduino via USB serial port"""
@@ -43,6 +53,9 @@ def connect_arduino():
         return None
 
 
+# -----------------------------
+# Helpers: datetime
+# -----------------------------
 def parse_iso(iso_str: str) -> datetime | None:
     """
     Parse ISO string like '2026-02-03T07:43:00.000Z' into a timezone-aware datetime (UTC).
@@ -101,9 +114,7 @@ def fetch_feeding_schedules() -> dict:
         ref_s = db.reference(FEEDING_SCHEDULES_PATH)
         data = ref_s.get() or {}
         if not isinstance(data, dict):
-            print(
-                "[Schedules] Unexpected data format at /feeding_schedules (expected object)."
-            )
+            print("[Schedules] Unexpected data format at /feeding_schedules (expected object).")
             return {}
         return data
     except Exception as e:
@@ -120,7 +131,6 @@ def get_next_feeding_schedule_from_cache(
     """
     global feeding_schedules_cache
     now_utc = now_utc or datetime.now(timezone.utc)
-
     best = None  # (next_run_dt, schedule_id, schedule_dict)
 
     for schedule_id, s in (feeding_schedules_cache or {}).items():
@@ -213,7 +223,6 @@ def get_next_cleaning_schedule_from_cache(
     """
     global cleaning_schedules_cache
     now_utc = now_utc or datetime.now(timezone.utc)
-
     best = None  # (next_run_dt, schedule_id, schedule_dict)
 
     for schedule_id, s in (cleaning_schedules_cache or {}).items():
@@ -275,6 +284,93 @@ def refresh_cleaning_schedules_cache():
     print("")
 
 
+# -----------------------------
+# Fetch optimal ranges + send to Arduino
+# -----------------------------
+def _normalize_opt_range(node_value: object, label: str) -> dict | None:
+    """
+    Ensure node_value looks like {"min": number, "max": number, "unit": str}
+    Returns normalized dict or None.
+    """
+    if not isinstance(node_value, dict):
+        print(f"[OptRange] {label}: unexpected format (expected object). Got: {type(node_value)}")
+        return None
+
+    try:
+        min_v = float(node_value.get("min"))
+        max_v = float(node_value.get("max"))
+        unit = str(node_value.get("unit", "")).strip()
+        if unit == "":
+            unit = "N/A"
+        return {"min": min_v, "max": max_v, "unit": unit}
+    except Exception:
+        print(f"[OptRange] {label}: invalid min/max/unit in: {node_value}")
+        return None
+
+
+def fetch_optimal_ranges() -> tuple[dict | None, dict | None]:
+    """
+    Fetch both:
+      - /opt_range_do
+      - /opt_range_temp
+    Returns (do_range, temp_range) normalized dicts or None.
+    """
+    try:
+        do_raw = db.reference(OPT_RANGE_DO_PATH).get()
+    except Exception as e:
+        print(f"[OptRange] Failed to fetch {OPT_RANGE_DO_PATH}: {e}")
+        do_raw = None
+
+    try:
+        temp_raw = db.reference(OPT_RANGE_TEMP_PATH).get()
+    except Exception as e:
+        print(f"[OptRange] Failed to fetch {OPT_RANGE_TEMP_PATH}: {e}")
+        temp_raw = None
+
+    do_range = _normalize_opt_range(do_raw, "DO") if do_raw is not None else None
+    temp_range = _normalize_opt_range(temp_raw, "TEMP") if temp_raw is not None else None
+    return do_range, temp_range
+
+
+def send_opt_ranges_to_arduino(ser: serial.Serial, do_range: dict | None, temp_range: dict | None):
+    """
+    Send optimal ranges to Arduino via serial as one JSON message.
+    Arduino should parse it and apply thresholds.
+    """
+    if ser is None:
+        return
+
+    payload = {
+        "type": "opt_ranges",
+        "timestamp": int(time.time()),
+        "do": do_range,         # {"min": 0, "max": 0, "unit": ""} or None
+        "temp": temp_range,     # {"min": 0, "max": 0, "unit": ""} or None
+    }
+
+    msg = json.dumps(payload) + "\n"
+    try:
+        ser.write(msg.encode("utf-8"))
+        ser.flush()
+        print("[Arduino] Sent optimal ranges:", payload)
+    except Exception as e:
+        print(f"[Arduino] Failed to send optimal ranges: {e}")
+
+
+def fetch_and_send_opt_ranges_once(ser: serial.Serial | None):
+    do_range, temp_range = fetch_optimal_ranges()
+
+    print("\n[OptRange] Loaded optimal ranges from Firebase:")
+    print(f"  DO:   {do_range}")
+    print(f"  TEMP: {temp_range}\n")
+
+    if ser is not None:
+        send_opt_ranges_to_arduino(ser, do_range, temp_range)
+
+
+
+# -----------------------------
+# Existing: process sensor data (optional)
+# -----------------------------
 def process_sensor_data(data):
     """Process and validate sensor data from Arduino"""
     try:
@@ -323,42 +419,48 @@ def main():
     # Load schedules on startup
     refresh_feeding_schedules_cache()
     refresh_cleaning_schedules_cache()
+    fetch_and_send_opt_ranges_once(ser)
 
-    # Refresh schedules every N seconds (simple polling)
-    SCHEDULE_REFRESH_SECONDS = 5
-    last_refresh = time.time()
+    SCHEDULE_REFRESH_SECONDS = 10
+
+    last_schedule_refresh = time.time()
+
+    print("Running... (polling schedules + optimal ranges)\n")
 
     try:
         while True:
-            # Periodically refresh feeding schedules
-            if time.time() - last_refresh >= SCHEDULE_REFRESH_SECONDS:
+            now = time.time()
+
+            if now - last_schedule_refresh >= SCHEDULE_REFRESH_SECONDS:
                 refresh_feeding_schedules_cache()
                 refresh_cleaning_schedules_cache()
-                last_refresh = time.time()
+                last_schedule_refresh = now
 
-            # Read serial data if available
-            # Uncomment this block when running on Raspberry Pi
+            # read Arduino messages (sensor data, logs, etc.)
             # if ser.in_waiting:
             #     try:
-            #         line = ser.readline().decode("utf-8").strip()
+            #         line = ser.readline().decode("utf-8", errors="replace").strip()
             #         if line:
+            #             # If Arduino sends JSON sensor data, this will handle it
             #             process_sensor_data(line)
-            #     except UnicodeDecodeError:
-            #         print("[Warning] Failed to decode serial data")
-            # else:
-            #     time.sleep(0.1)
+            #     except Exception as e:
+            #         print(f"[Warning] Serial read error: {e}")
 
             time.sleep(0.1)
 
     except KeyboardInterrupt:
         print("\nShutting down...")
-        # If Arduino enabled, close it:
-        # ser.close()
+        try:
+            ser.close()
+        except Exception:
+            pass
         sys.exit(0)
     except Exception as e:
         print(f"[Error] {e}")
-        # If Arduino enabled, close it:
-        # ser.close()
+        try:
+            ser.close()
+        except Exception:
+            pass
         sys.exit(1)
 
 

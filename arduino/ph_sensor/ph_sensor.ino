@@ -19,22 +19,11 @@ void setup() {
   Wire.begin();
   Serial.begin(9600);
 
-<<<<<<< Updated upstream
-  lcd.init();         // initialize the lcd
-  lcd.backlight();    // Turn on the LCD screen backlight
-
-  timer.setInterval(500L, display_pHValue);
-}
-
-void loop() {
-  timer.run();  // Initiates SimpleTimer
-=======
 //  timer.setInterval(500L, display_pHValue);
 }
 
 void loop() {
 //  timer.run();  // Initiates SimpleTimer
->>>>>>> Stashed changes
   for (int i = 0; i < 10; i++) {
     buffer_arr[i] = analogRead(A0);
     delay(30);
@@ -58,4 +47,5 @@ void loop() {
   Serial.println(ph_act);
   delay(1000);
 }
+
 

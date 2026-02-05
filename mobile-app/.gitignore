@@ -44,3 +44,6 @@ app-example
 
 # google services config files
 google-services.json
+
+# test users credentials
+test-users.txt

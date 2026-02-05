@@ -1,5 +1,4 @@
-import React from 'react';
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, TextInput, TouchableOpacity, View, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
@@ -7,7 +6,9 @@ import { ThemedView } from '@/components/themed-view';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '@/firebase';
+import { auth, database } from '@/firebase';
+import { useAuth } from '@/context/auth-context';
+import { ref, get } from 'firebase/database';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -15,6 +16,7 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const colorScheme = useColorScheme();
+  const { loading: loadingUser, isAdmin } = useAuth();
 
   const handleLogin = async () => {
     // Validate inputs
@@ -30,8 +32,43 @@ export default function LoginScreen() {
 
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      router.replace('/(tabs)');
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const uid = userCredential.user.uid;
+
+      // Check user status in database
+      const userRef = ref(database, `/users/${uid}`);
+      const snapshot = await get(userRef);
+
+      if (!snapshot.exists()) {
+        Alert.alert('Error', 'User profile not found. Please contact administrator.');
+        setLoading(false);
+        return;
+      }
+
+      const userData = snapshot.val();
+
+      // Check if user is approved
+      if (userData.user_status !== 'approved') {
+        // Sign out the user since they're not approved
+        await auth.signOut();
+        
+        if (userData.user_status === 'pending') {
+          Alert.alert('Pending Approval', 'Your account is awaiting admin approval. Please try again later.');
+        } else if (userData.user_status === 'rejected') {
+          Alert.alert('Access Denied', 'Your account has been rejected. Please contact the administrator.');
+        } else {
+          Alert.alert('Access Denied', 'You do not have permission to access this application.');
+        }
+        setLoading(false);
+        return;
+      }
+
+      // User is approved, navigation will be handled by auth context
+      if (!loadingUser && isAdmin) {
+        router.replace('/(admin)');
+      } else {
+        router.replace('/(operator)');
+      }
     } catch (error: any) {
       Alert.alert('Login Failed', error.message || 'An error occurred during login');
     } finally {

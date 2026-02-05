@@ -11,6 +11,7 @@ import { ref, onValue } from 'firebase/database';
 import { ThemedText } from '@/components/themed-text';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAuth } from '@/context/auth-context';
 
 interface SensorData {
   value: number;
@@ -28,13 +29,22 @@ interface SensorMetric {
 
 export default function SensorsScreen() {
   const colorScheme = useColorScheme();
+  const { isAdmin } = useAuth();
   const router = useRouter();
+
+  // Guard: Redirect admin users
+  useEffect(() => {
+    if (isAdmin) {
+      router.replace('/(admin)');
+    }
+  }, [isAdmin, router]);
   const [phLevel, setPhLevel] = useState<SensorData | null>(null);
   const [waterTemp, setWaterTemp] = useState<SensorData | null>(null);
   const [dissolvedOxygen, setDissolvedOxygen] = useState<SensorData | null>(
     null
   );
   const [nextFeedTime, setNextFeedTime] = useState<string>('4:00 PM');
+  const [nextCleanTime, setNextCleanTime] = useState<string>('6:00 PM');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -109,6 +119,13 @@ export default function SensorsScreen() {
       value: null,
       loading: false,
     },
+    {
+      id: 'cleaner',
+      label: 'Automated Water Cleaner',
+      imageSource: require('@/assets/images/water-cleaning.png'),
+      value: null,
+      loading: false,
+    },
   ];
 
   const iconColor = colorScheme === 'dark' ? '#4A90E2' : '#1F5BA8';
@@ -138,7 +155,7 @@ export default function SensorsScreen() {
           Water Quality
         </ThemedText>
         {metrics.map((metric) => {
-          const isTappable = ['ph', 'temp', 'oxygen', 'feeder'].includes(
+          const isTappable = ['ph', 'temp', 'oxygen', 'feeder', 'cleaner'].includes(
             metric.id
           );
           const navigationMap: { [key: string]: string } = {
@@ -146,6 +163,7 @@ export default function SensorsScreen() {
             temp: 'temperature-detail',
             oxygen: 'oxygen-detail',
             feeder: 'feeder-detail',
+            cleaner: 'cleaner-detail',
           };
 
           return (
@@ -190,6 +208,11 @@ export default function SensorsScreen() {
                           Next Feed: {nextFeedTime}
                         </ThemedText>
                       )}
+                      {metric.id === 'cleaner' && (
+                        <ThemedText style={styles.metricSubLabel}>
+                          Next Cleaning: {nextCleanTime}
+                        </ThemedText>
+                      )}
                     </View>
                   </View>
                   <View style={styles.metricRight}>
@@ -200,7 +223,7 @@ export default function SensorsScreen() {
                         {metric.value.value}
                         {metric.value.unit}
                       </ThemedText>
-                    ) : metric.id === 'feeder' ? (
+                    ) : metric.id === 'feeder' || metric.id === 'cleaner' ? (
                       <View />
                     ) : (
                       <ThemedText style={styles.metricValue}>

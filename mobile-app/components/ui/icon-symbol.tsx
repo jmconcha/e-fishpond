@@ -7,18 +7,26 @@ import { Image } from 'react-native';
 import { SymbolWeight, SymbolViewProps } from 'expo-symbols';
 import { OpaqueColorValue, type StyleProp, type TextStyle } from 'react-native';
 
-type IconMapping = Record<SymbolViewProps['name'], { icon: string; family: 'material' | 'fontawesome5' | 'fontawesome6' }>;
+type IconMapping = Record<
+  SymbolViewProps['name'],
+  { icon: string; family: 'material' | 'fontawesome5' | 'fontawesome6' }
+>;
 const MAPPING = {
   'house.fill': { icon: 'home', family: 'material' },
   'paperplane.fill': { icon: 'send', family: 'material' },
-  'chevron.left.forwardslash.chevron.right': { icon: 'code', family: 'material' },
+  'chevron.left.forwardslash.chevron.right': {
+    icon: 'code',
+    family: 'material',
+  },
   'chevron.right': { icon: 'chevron-right', family: 'material' },
   'chevron.left': { icon: 'chevron-left', family: 'material' },
   'water.drop.fill': { icon: 'water-drop', family: 'material' },
   'temperature.low.fill': { icon: 'temperature-low', family: 'fontawesome5' },
   'oxygen.fill': { icon: 'arrow-up-from-water-pump', family: 'fontawesome6' },
   'fish.fill': { icon: 'fish', family: 'fontawesome5' },
-  'person.fill': { icon: 'user-circle', family: 'fontawesome5' },
+  'person.fill': { icon: 'user', family: 'fontawesome6' },
+  'user-gear.fill': { icon: 'user-gear', family: 'fontawesome6' },
+  'devices.outline': { icon: 'devices-other', family: 'materialicons' },
 } as const;
 
 /**
@@ -33,7 +41,7 @@ export function IconSymbol({
   style,
   imageSource,
 }: {
-  name?: IconMapping;
+  name?: keyof typeof MAPPING;
   size?: number;
   color?: string | OpaqueColorValue;
   style?: StyleProp<TextStyle>;
@@ -54,19 +62,42 @@ export function IconSymbol({
   }
 
   const iconConfig = MAPPING[name];
-  
+
   if (!iconConfig) {
     console.warn(`Icon mapping not found for: ${name}`);
-    return <MaterialIcons color={color} size={size} name="help" style={style} />;
+    return (
+      <MaterialIcons color={color} size={size} name="help" style={style} />
+    );
   }
-  
+
   if (iconConfig.family === 'fontawesome6') {
-    return <FontAwesome6 color={color} size={size} name={iconConfig.icon} style={style} />;
+    return (
+      <FontAwesome6
+        color={color}
+        size={size}
+        name={iconConfig.icon}
+        style={style}
+      />
+    );
   }
-  
+
   if (iconConfig.family === 'fontawesome5') {
-    return <FontAwesome5 color={color} size={size} name={iconConfig.icon} style={style} />;
+    return (
+      <FontAwesome5
+        color={color}
+        size={size}
+        name={iconConfig.icon}
+        style={style}
+      />
+    );
   }
-  
-  return <MaterialIcons color={color} size={size} name={iconConfig.icon} style={style} />;
+
+  return (
+    <MaterialIcons
+      color={color}
+      size={size}
+      name={iconConfig.icon}
+      style={style}
+    />
+  );
 }

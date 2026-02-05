@@ -1,5 +1,4 @@
-import React from 'react';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { database } from '@/firebase';
@@ -16,6 +15,7 @@ interface SensorData {
 
 interface DeviceStatus {
   status: boolean;
+  power_state: "off" | "on";
 }
 
 export default function TemperatureDetailScreen() {
@@ -43,28 +43,32 @@ export default function TemperatureDetailScreen() {
     const unsubscribeHeater = onValue(heaterRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val() as DeviceStatus;
-        setHeaterStatus(data.status);
+        setHeaterStatus(data.power_state === "on" ? true : false);
         const now = new Date();
-        setHeaterTimestamp(now.toLocaleTimeString('en-US', {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: true,
-        }));
+        setHeaterTimestamp(
+          now.toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true,
+          }),
+        );
       }
     });
 
     const unsubscribeCooler = onValue(coolerRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val() as DeviceStatus;
-        setCoolerStatus(data.status);
+        setCoolerStatus(data.power_state === "on" ? true : false);
         const now = new Date();
-        setCoolerTimestamp(now.toLocaleTimeString('en-US', {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: true,
-        }));
+        setCoolerTimestamp(
+          now.toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true,
+          }),
+        );
       }
     });
 
@@ -76,16 +80,17 @@ export default function TemperatureDetailScreen() {
   }, []);
 
   return (
-    <View style={[styles.container, { backgroundColor: colorScheme === 'dark' ? '#151718' : '#F8F9FA' }]}>
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: colorScheme === 'dark' ? '#151718' : '#F8F9FA' },
+      ]}
+    >
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <IconSymbol size={24} name="chevron.left" color="#FFFFFF" />
-        </TouchableOpacity>
         <ThemedText type="title" style={styles.headerTitle}>
-          e-FishPond
+          Water Temperature
         </ThemedText>
-        <View style={styles.backButton} />
       </View>
 
       {/* Content */}
@@ -94,14 +99,13 @@ export default function TemperatureDetailScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.contentContainer}
       >
-        {/* Title */}
-        <ThemedText type="title" style={styles.sectionTitle}>Water Temperature</ThemedText>
-
         {/* Main Card */}
-        <View style={[
-          styles.mainCard,
-          { backgroundColor: colorScheme === 'dark' ? '#252627' : '#FFFFFF' }
-        ]}>
+        <View
+          style={[
+            styles.mainCard,
+            { backgroundColor: colorScheme === 'dark' ? '#252627' : '#FFFFFF' },
+          ]}
+        >
           {/* Icon */}
           <View style={styles.iconContainer}>
             <IconSymbol
@@ -121,14 +125,18 @@ export default function TemperatureDetailScreen() {
           </ThemedText>
 
           {/* Optimal Range */}
-          <ThemedText style={styles.optimalText}>Optimal: 25°C - 28°C</ThemedText>
+          <ThemedText style={styles.optimalText}>
+            Optimal: 25°C - 28°C
+          </ThemedText>
         </View>
 
         {/* Device Status Section */}
-        <View style={[
-          styles.statusCard,
-          { backgroundColor: colorScheme === 'dark' ? '#252627' : '#FFFFFF' }
-        ]}>
+        <View
+          style={[
+            styles.statusCard,
+            { backgroundColor: colorScheme === 'dark' ? '#252627' : '#FFFFFF' },
+          ]}
+        >
           <ThemedText type="defaultSemiBold" style={styles.statusCardTitle}>
             Temperature Control Devices
           </ThemedText>
@@ -137,36 +145,62 @@ export default function TemperatureDetailScreen() {
           <View style={styles.deviceRow}>
             <View style={styles.deviceInfo}>
               <View style={styles.deviceNameRow}>
-                <IconSymbol size={18} imageSource={require('@/assets/images/flame.png')} color="#FF6B6B" style={styles.deviceIcon} />
+                <IconSymbol
+                  size={18}
+                  imageSource={require('@/assets/images/flame.png')}
+                  color="#FF6B6B"
+                  style={styles.deviceIcon}
+                />
                 <ThemedText style={styles.deviceName}>Heater</ThemedText>
               </View>
               <View style={styles.statusRow}>
-                <ThemedText style={[
-                  styles.deviceStatus,
-                  { color: heaterStatus ? '#4CAF50' : '#FF6B6B' }
-                ]}>
+                <ThemedText
+                  style={[
+                    styles.deviceStatus,
+                    { color: heaterStatus ? '#4CAF50' : '#FF6B6B' },
+                  ]}
+                >
                   {heaterStatus === null ? '--' : heaterStatus ? 'ON' : 'OFF'}
                 </ThemedText>
-                <ThemedText style={styles.timestampText}>{heaterTimestamp}</ThemedText>
+                <ThemedText style={styles.timestampText}>
+                  {heaterTimestamp}
+                </ThemedText>
               </View>
             </View>
           </View>
 
           {/* Cooler Status */}
-          <View style={[styles.deviceRow, { borderTopWidth: 1, borderTopColor: colorScheme === 'dark' ? '#3A3B3C' : '#E0E0E0', paddingTopVertical: 12, marginTopVertical: 12 }]}>
+          <View
+            style={[
+              styles.deviceRow,
+              {
+                borderTopWidth: 1,
+                borderTopColor: colorScheme === 'dark' ? '#3A3B3C' : '#E0E0E0',
+              },
+            ]}
+          >
             <View style={styles.deviceInfo}>
               <View style={styles.deviceNameRow}>
-                <IconSymbol size={18} imageSource={require('@/assets/images/snowflake.png')} color="#00BCD4" style={styles.deviceIcon} />
+                <IconSymbol
+                  size={18}
+                  imageSource={require('@/assets/images/snowflake.png')}
+                  color="#00BCD4"
+                  style={styles.deviceIcon}
+                />
                 <ThemedText style={styles.deviceName}>Cooler</ThemedText>
               </View>
               <View style={styles.statusRow}>
-                <ThemedText style={[
-                  styles.deviceStatus,
-                  { color: coolerStatus ? '#4CAF50' : '#FF6B6B' }
-                ]}>
+                <ThemedText
+                  style={[
+                    styles.deviceStatus,
+                    { color: coolerStatus ? '#4CAF50' : '#FF6B6B' },
+                  ]}
+                >
                   {coolerStatus === null ? '--' : coolerStatus ? 'ON' : 'OFF'}
                 </ThemedText>
-                <ThemedText style={styles.timestampText}>{coolerTimestamp}</ThemedText>
+                <ThemedText style={styles.timestampText}>
+                  {coolerTimestamp}
+                </ThemedText>
               </View>
             </View>
           </View>
@@ -178,7 +212,8 @@ export default function TemperatureDetailScreen() {
             About Water Temperature
           </ThemedText>
           <ThemedText style={styles.infoText}>
-            Water temperature affects fish metabolism and plant growth. Most aquaponic systems thrive in warm water conditions between 25-28°C.
+            Water temperature affects fish metabolism and plant growth. Most
+            aquaponic systems thrive in warm water conditions between 25-28°C.
           </ThemedText>
         </View>
       </ScrollView>
@@ -208,6 +243,9 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 28,
     fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 20,
+    width: '100%',
   },
   scrollView: {
     flex: 1,
@@ -276,6 +314,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 12,
+    marginVertical: 12,
   },
   deviceInfo: {
     flex: 1,

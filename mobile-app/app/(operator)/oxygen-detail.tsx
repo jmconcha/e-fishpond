@@ -15,12 +15,15 @@ interface SensorData {
 
 interface DeviceStatus {
   status: boolean;
+  power_state: "off" | "on";
 }
 
 export default function OxygenDetailScreen() {
   const colorScheme = useColorScheme();
   const router = useRouter();
-  const [dissolvedOxygen, setDissolvedOxygen] = useState<SensorData | null>(null);
+  const [dissolvedOxygen, setDissolvedOxygen] = useState<SensorData | null>(
+    null,
+  );
   const [aeratorStatus, setAeratorStatus] = useState<boolean | null>(null);
   const [aeratorTimestamp, setAeratorTimestamp] = useState<string>('--');
   const [loading, setLoading] = useState(true);
@@ -28,7 +31,7 @@ export default function OxygenDetailScreen() {
   useEffect(() => {
     const oxygenRef = ref(database, '/sensors/dissolved_oxygen');
     const aeratorRef = ref(database, '/devices/aerator');
-    
+
     const unsubscribeOxygen = onValue(oxygenRef, (snapshot) => {
       if (snapshot.exists()) {
         setDissolvedOxygen(snapshot.val());
@@ -39,14 +42,16 @@ export default function OxygenDetailScreen() {
     const unsubscribeAerator = onValue(aeratorRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val() as DeviceStatus;
-        setAeratorStatus(data.status);
+        setAeratorStatus(data.power_state === "on" ? true : false);
         const now = new Date();
-        setAeratorTimestamp(now.toLocaleTimeString('en-US', {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: true,
-        }));
+        setAeratorTimestamp(
+          now.toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true,
+          }),
+        );
       }
     });
 
@@ -57,14 +62,16 @@ export default function OxygenDetailScreen() {
   }, []);
 
   return (
-    <View style={[styles.container, { backgroundColor: colorScheme === 'dark' ? '#151718' : '#F8F9FA' }]}>
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: colorScheme === 'dark' ? '#151718' : '#F8F9FA' },
+      ]}
+    >
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <IconSymbol size={24} name="chevron.left" color="#FFFFFF" />
-        </TouchableOpacity>
         <ThemedText type="title" style={styles.headerTitle}>
-          e-FishPond
+          Dissolved Oxygen
         </ThemedText>
         <View style={styles.backButton} />
       </View>
@@ -75,14 +82,13 @@ export default function OxygenDetailScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.contentContainer}
       >
-        {/* Title */}
-        <ThemedText type="title" style={styles.sectionTitle}>Dissolved Oxygen</ThemedText>
-
         {/* Main Card */}
-        <View style={[
-          styles.mainCard,
-          { backgroundColor: colorScheme === 'dark' ? '#252627' : '#FFFFFF' }
-        ]}>
+        <View
+          style={[
+            styles.mainCard,
+            { backgroundColor: colorScheme === 'dark' ? '#252627' : '#FFFFFF' },
+          ]}
+        >
           {/* Icon */}
           <View style={styles.iconContainer}>
             <IconSymbol
@@ -98,18 +104,26 @@ export default function OxygenDetailScreen() {
 
           {/* Value */}
           <ThemedText style={styles.valueText}>
-            {loading ? '--' : dissolvedOxygen ? dissolvedOxygen.value : 'No data'}
+            {loading
+              ? '--'
+              : dissolvedOxygen
+                ? dissolvedOxygen.value
+                : 'No data'}
           </ThemedText>
 
           {/* Optimal Range */}
-          <ThemedText style={styles.optimalText}>Optimal: 5.0 - 8.0 mg/L</ThemedText>
+          <ThemedText style={styles.optimalText}>
+            Optimal: 5.0 - 8.0 mg/L
+          </ThemedText>
         </View>
 
         {/* Device Status Section */}
-        <View style={[
-          styles.statusCard,
-          { backgroundColor: colorScheme === 'dark' ? '#252627' : '#FFFFFF' }
-        ]}>
+        <View
+          style={[
+            styles.statusCard,
+            { backgroundColor: colorScheme === 'dark' ? '#252627' : '#FFFFFF' },
+          ]}
+        >
           <ThemedText type="defaultSemiBold" style={styles.statusCardTitle}>
             Oxygen Control Devices
           </ThemedText>
@@ -118,17 +132,26 @@ export default function OxygenDetailScreen() {
           <View style={styles.deviceRow}>
             <View style={styles.deviceInfo}>
               <View style={styles.deviceNameRow}>
-                <IconSymbol size={18} imageSource={require('@/assets/images/aeration.png')} color="#2196F3" style={styles.deviceIcon} />
+                <IconSymbol
+                  size={18}
+                  imageSource={require('@/assets/images/aeration.png')}
+                  color="#2196F3"
+                  style={styles.deviceIcon}
+                />
                 <ThemedText style={styles.deviceName}>Aerator</ThemedText>
               </View>
               <View style={styles.statusRow}>
-                <ThemedText style={[
-                  styles.deviceStatus,
-                  { color: aeratorStatus ? '#4CAF50' : '#FF6B6B' }
-                ]}>
+                <ThemedText
+                  style={[
+                    styles.deviceStatus,
+                    { color: aeratorStatus ? '#4CAF50' : '#FF6B6B' },
+                  ]}
+                >
                   {aeratorStatus === null ? '--' : aeratorStatus ? 'ON' : 'OFF'}
                 </ThemedText>
-                <ThemedText style={styles.timestampText}>{aeratorTimestamp}</ThemedText>
+                <ThemedText style={styles.timestampText}>
+                  {aeratorTimestamp}
+                </ThemedText>
               </View>
             </View>
           </View>
@@ -140,7 +163,10 @@ export default function OxygenDetailScreen() {
             About Dissolved Oxygen
           </ThemedText>
           <ThemedText style={styles.infoText}>
-            Dissolved oxygen (DO) is essential for fish respiration and the growth of beneficial bacteria in the system. Adequate oxygen levels ensure a healthy aquaponic environment where both fish and plants can thrive.
+            Dissolved oxygen (DO) is essential for fish respiration and the
+            growth of beneficial bacteria in the system. Adequate oxygen levels
+            ensure a healthy aquaponic environment where both fish and plants
+            can thrive.
           </ThemedText>
         </View>
       </ScrollView>
@@ -170,6 +196,9 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 28,
     fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 20,
+    width: '100%',
   },
   scrollView: {
     flex: 1,

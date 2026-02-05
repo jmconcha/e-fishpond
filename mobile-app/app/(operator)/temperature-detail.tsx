@@ -15,6 +15,7 @@ interface SensorData {
 
 interface DeviceStatus {
   status: boolean;
+  power_state: "off" | "on";
 }
 
 export default function TemperatureDetailScreen() {
@@ -42,7 +43,7 @@ export default function TemperatureDetailScreen() {
     const unsubscribeHeater = onValue(heaterRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val() as DeviceStatus;
-        setHeaterStatus(data.status);
+        setHeaterStatus(data.power_state === "on" ? true : false);
         const now = new Date();
         setHeaterTimestamp(
           now.toLocaleTimeString('en-US', {
@@ -58,7 +59,7 @@ export default function TemperatureDetailScreen() {
     const unsubscribeCooler = onValue(coolerRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val() as DeviceStatus;
-        setCoolerStatus(data.status);
+        setCoolerStatus(data.power_state === "on" ? true : false);
         const now = new Date();
         setCoolerTimestamp(
           now.toLocaleTimeString('en-US', {

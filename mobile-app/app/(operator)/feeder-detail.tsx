@@ -23,6 +23,7 @@ interface FeederData {
   next_feed_time?: string;
   is_schedule_editable?: boolean;
   status?: 'idle' | 'feeding' | 'maintenance' | 'error';
+  power_state?: 'off' | 'on';
 }
 
 interface FeedingSchedule {
@@ -85,6 +86,7 @@ export default function FeederDetailScreen() {
           next_feed_time: data.next_feed_time || 'Not scheduled',
           is_schedule_editable: data.is_sched_editable || false,
           status: data.status || 'idle',
+          power_state: data.power_state || 'off',
         });
         setNextFeedTime(data.next_feed_time || 'Not scheduled');
       } else {
@@ -433,14 +435,12 @@ export default function FeederDetailScreen() {
     });
   }, [schedules]);
 
-  const statusText = () => {
-    switch (feederData.status) {
-      case 'feeding':
+  const getStatusText = () => {
+    switch (feederData.power_state) {
+      case 'on':
         return 'Feeding In Progress';
-      case 'maintenance':
-        return 'Maintenance Required';
-      case 'error':
-        return 'Error - Check System';
+      case 'off':
+        return 'Feeder Inactive';
       default:
         return 'Feeder Active';
     }
@@ -501,7 +501,7 @@ export default function FeederDetailScreen() {
           </View>
 
           {/* Status */}
-          <ThemedText style={styles.statusText}>{statusText()}</ThemedText>
+          <ThemedText style={[styles.statusText, { color: feederData.power_state === 'on' ? '#4CAF50' : '#000000' }]}>{getStatusText()}</ThemedText>
 
           {/* Value */}
           <ThemedText style={styles.valueText}>

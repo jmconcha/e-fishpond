@@ -15,6 +15,7 @@ interface SensorData {
 
 interface DeviceStatus {
   status: boolean;
+  power_state: "off" | "on";
 }
 
 export default function OxygenDetailScreen() {
@@ -41,7 +42,7 @@ export default function OxygenDetailScreen() {
     const unsubscribeAerator = onValue(aeratorRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val() as DeviceStatus;
-        setAeratorStatus(data.status);
+        setAeratorStatus(data.power_state === "on" ? true : false);
         const now = new Date();
         setAeratorTimestamp(
           now.toLocaleTimeString('en-US', {

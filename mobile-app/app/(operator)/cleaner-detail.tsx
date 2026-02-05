@@ -22,6 +22,7 @@ interface CleaningData {
   next_cleaning_time?: string;
   last_cleaned?: string;
   cleaning_duration?: number;
+  power_state: 'on' | 'off';
   status?: 'idle' | 'cleaning' | 'maintenance' | 'error';
   water_quality?: number;
   filter_life?: number;
@@ -50,6 +51,7 @@ export default function WaterCleaningScreen() {
     water_quality: 85,
     filter_life: 75,
     is_schedule_editable: false,
+    power_state: 'off',
   });
 
   const [loading, setLoading] = useState(true);
@@ -92,6 +94,7 @@ export default function WaterCleaningScreen() {
           water_quality: data.water_quality || 85,
           filter_life: data.filter_life || 75,
           is_schedule_editable: data.is_sched_editable || false,
+          power_state: data.power_state || 'off',
         });
       }
       setLoading(false);
@@ -409,36 +412,6 @@ export default function WaterCleaningScreen() {
     })}${best.s.repeat_daily ? ' (daily)' : ''}`;
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'cleaning':
-        return '#4CAF50';
-      case 'idle':
-        return '#2196F3';
-      case 'maintenance':
-        return '#FF9800';
-      case 'error':
-        return '#f44336';
-      default:
-        return '#9E9E9E';
-    }
-  };
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'cleaning':
-        return 'Cleaning In Progress';
-      case 'idle':
-        return 'Ready';
-      case 'maintenance':
-        return 'Maintenance Required';
-      case 'error':
-        return 'Error - Check System';
-      default:
-        return 'Unknown';
-    }
-  };
-
   const handleStartCleaning = async () => {
     if (cleaningData.status === 'cleaning') {
       Alert.alert(
@@ -538,16 +511,14 @@ export default function WaterCleaningScreen() {
     });
   }, [schedules]);
 
-  const statusText = () => {
-    switch (cleaningData.status) {
-      case 'cleaning':
-        return 'Feeding In Progress';
-      case 'maintenance':
-        return 'Maintenance Required';
-      case 'error':
-        return 'Error - Check System';
+  const getStatusText = () => {
+    switch (cleaningData.power_state) {
+      case 'on':
+        return 'Cleaning In Progress';
+      case 'off':
+        return 'Cleaner Inactive';
       default:
-        return 'Feeder Active';
+        return 'Cleaner Active';
     }
   };
 
@@ -608,7 +579,7 @@ export default function WaterCleaningScreen() {
           </View>
 
           {/* Status */}
-          <ThemedText style={styles.statusText}>{statusText()}</ThemedText>
+          <ThemedText style={[styles.statusText, { color: cleaningData.power_state === 'on' ? '#4CAF50' : '#000000' }]}>{getStatusText()}</ThemedText>
 
           {/* Value */}
           <ThemedText style={styles.valueText}>

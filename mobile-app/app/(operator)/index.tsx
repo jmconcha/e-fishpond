@@ -155,7 +155,7 @@ export default function SensorsScreen() {
           Water Quality
         </ThemedText>
         {metrics.map((metric) => {
-          const isTappable = ['ph', 'temp', 'oxygen', 'feeder'].includes(
+          const isTappable = ['ph', 'temp', 'oxygen', 'feeder', 'cleaner'].includes(
             metric.id
           );
           const navigationMap: { [key: string]: string } = {
@@ -163,6 +163,7 @@ export default function SensorsScreen() {
             temp: 'temperature-detail',
             oxygen: 'oxygen-detail',
             feeder: 'feeder-detail',
+            cleaner: 'cleaner-detail',
           };
 
           return (

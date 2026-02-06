@@ -10,8 +10,8 @@ import { initializeAuth } from 'firebase/auth';
 // Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
-  authDomain: "e-fishpond.firebaseapp.com",
-  databaseURL: "https://e-fishpond-default-rtdb.asia-southeast1.firebasedatabase.app",
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  databaseURL: process.env.EXPO_PUBLIC_FIREBASE_DB_URL,
   projectId: "e-fishpond",
   storageBucket: "e-fishpond.firebasestorage.app",
   messagingSenderId: "90603907240",

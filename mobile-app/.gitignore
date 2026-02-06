@@ -47,3 +47,8 @@ google-services.json
 
 # test users credentials
 test-users.txt
+
+# firebase
+/emulator-data
+firebase-debug.log
+database-debug.log

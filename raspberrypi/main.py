@@ -25,6 +25,11 @@ PH_SENSOR_PATH = "/sensors/ph_level"
 DO_SENSOR_PATH = "/sensors/dissolved_oxygen"
 HEATER_PATH = "/devices/heater"
 
+# Devices paths
+HEATER_DEVICE_PATH = "/devices/heater"
+COOLER_DEVICE_PATH = "/devices/cooler"
+AERATOR_DEVICE_PATH = "/devices/aerator"
+
 # Load credentials
 cred = credentials.Certificate("./service_account_key.json")
 
@@ -204,22 +209,36 @@ def process_sensor_data(line: str) -> bool:
 
 
     def update_ph_async(ph, ts):
-        db.reference(PH_SENSOR_PATH).set({
+        db.reference(PH_SENSOR_PATH).update({
             "value": float(ph),
-            "unit": "pH",
             "timestamp": ts
         })
+    
     def update_temp_async(temp, ts):
-        db.reference(TEMP_SENSOR_PATH).set({
+        db.reference(TEMP_SENSOR_PATH).update({
             "value": float(temp),
-            "unit": "°C",
             "timestamp": ts
         })
+    
     def update_do_async(do_val, ts):
-        db.reference(DO_SENSOR_PATH).set({
+        db.reference(DO_SENSOR_PATH).update({
             "value": float(do_val),
-            "unit": "mg/L",
             "timestamp": ts
+        })
+    
+    def update_heater_async(heater, ts):
+        db.reference(HEATER_DEVICE_PATH).update({
+            "power_state": "on" if heater else "off",
+        })
+
+    def update_cooler_async(cooler, ts):
+        db.reference(COOLER_DEVICE_PATH).update({
+            "power_state": "on" if cooler else "off",
+        })
+
+    def update_aerator_async(aerator, ts):
+        db.reference(AERATOR_DEVICE_PATH).update({
+            "power_state": "on" if aerator else "off",
         })
 
 
@@ -231,6 +250,8 @@ def process_sensor_data(line: str) -> bool:
 
     try:
         parsed = json.loads(line)
+        sensors = parsed.get("sensors", {})
+        devices_status = parsed.get("devices", {})
 
         print('[Arduino] Parsed JSON:', parsed)
 
@@ -240,24 +261,49 @@ def process_sensor_data(line: str) -> bool:
 
         ts = int(time.time())
 
+        # sensor data firebase updates
         # Temperature
-        temp = parsed.get("temp")
+        temp = sensors.get("temp")
         if temp is not None:
             Thread(target=update_temp_async, args=(temp, ts), daemon=True).start()
 
         # pH
-        ph = parsed.get("ph")
+        ph = sensors.get("ph")
         if ph is not None:
             Thread(target=update_ph_async, args=(ph, ts), daemon=True).start()
 
         # Dissolved Oxygen
-        do_val = parsed.get("do")
+        do_val = sensors.get("do")
         if do_val is not None:
+
             Thread(target=update_do_async, args=(do_val, ts), daemon=True).start()
 
         print(
             f"[Sensor Data] Temp={temp}°C | pH={ph} | DO={do_val} mg/L"
         )
+
+
+        # devices status data firebase updates
+        # Heater
+        heater = devices_status.get("heater")
+        if heater is not None:
+            
+            Thread(target=update_heater_async, args=(heater, ts), daemon=True).start()
+
+        # Cooler
+        cooler = devices_status.get("cooler")
+        if cooler is not None:
+            Thread(target=update_cooler_async, args=(cooler, ts), daemon=True).start()
+
+        # Aerator
+        aerator = devices_status.get("aerator")
+        if aerator is not None:
+            Thread(target=update_aerator_async, args=(aerator, ts), daemon=True).start()
+
+        print(
+            f"[Devices Status Data] Heater={heater} | Cooler={cooler} | Aerator={aerator}"
+        )
+
         return True
 
     except json.JSONDecodeError:
@@ -277,21 +323,21 @@ def main():
     print("Listening for Arduino JSON...")
 
     # Startup fetches
-    # refresh_feeding_schedules_cache()
-    # refresh_cleaning_schedules_cache()
-    # fetch_and_send_opt_ranges_once(ser)
+    refresh_feeding_schedules_cache()
+    refresh_cleaning_schedules_cache()
+    fetch_and_send_opt_ranges_once(ser)
 
-    # SCHEDULE_REFRESH_SECONDS = 10
-    # last_schedule_refresh = time.time()
+    SCHEDULE_REFRESH_SECONDS = 10
+    last_schedule_refresh = time.time()
 
     try:
         while True:
-            # now = time.time()
+            now = time.time()
 
-            # if now - last_schedule_refresh >= SCHEDULE_REFRESH_SECONDS:
-            #     refresh_feeding_schedules_cache()
-            #     refresh_cleaning_schedules_cache()
-            #     last_schedule_refresh = now
+            if now - last_schedule_refresh >= SCHEDULE_REFRESH_SECONDS:
+                refresh_feeding_schedules_cache()
+                refresh_cleaning_schedules_cache()
+                last_schedule_refresh = now
 
             if ser.in_waiting:
                 line = ser.readline().decode("utf-8", errors="replace").strip()

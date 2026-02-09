@@ -5,15 +5,37 @@
 
 // -------------------- Pin definitions --------------------
 #define ONE_WIRE_BUS 2
-
 #define RELAY_OFF HIGH
 #define RELAY_ON  LOW
 #define HEATER_PIN 8
+#define COOLER_PIN 11
+#define COOLER_PUMP_PIN 10
+#define AERATOR_PIN 9
 
 #define PH_PIN A0
 #define DO_PIN A1
 
 #define BAUD_RATE 9600
+
+// -------------------- optimal water temperature range --------------------
+#define TEMP_MIN 28.0  // °C
+#define TEMP_MAX 32.0  // °C
+#define OPT_TEMP TEMP_MIN + ((TEMP_MAX - TEMP_MIN) / 2.0)
+
+// -------------------- optimal dissolved oxygen level range --------------------
+#define DO_MIN 5.0  // mg/L
+#define DO_MAX 8.0  // mg/L
+#define OPT_DO DO_MIN + ((DO_MAX - DO_MIN) / 2.0)
+
+// -------------------- devices power state --------------------
+// heater
+#define DEVICE_ON  1
+#define DEVICE_OFF  0
+int heaterState = DEVICE_OFF;
+// cooler
+int coolerState = DEVICE_OFF;
+// aerator
+int aeratorState = DEVICE_OFF;
 
 // -------------------- Send interval --------------------
 unsigned long lastSendTime = 0;
@@ -136,8 +158,34 @@ void controlHeater(int powerState)
 {
   if (powerState == 1) {
     digitalWrite(HEATER_PIN, RELAY_ON);
+    heaterState = DEVICE_ON;
   } else {
     digitalWrite(HEATER_PIN, RELAY_OFF);
+    heaterState = DEVICE_OFF;
+  }
+}
+
+void controlCooler(int powerState)
+{
+  if (powerState == 1) {
+    digitalWrite(COOLER_PIN, RELAY_ON);
+    digitalWrite(COOLER_PUMP_PIN, RELAY_ON);
+    coolerState = DEVICE_ON;
+  } else {
+    digitalWrite(COOLER_PIN, RELAY_OFF);
+    digitalWrite(COOLER_PUMP_PIN, RELAY_OFF);
+    coolerState = DEVICE_OFF;
+  }
+}
+
+void controlAerator(int powerState)
+{
+  if (powerState == 1) {
+    digitalWrite(AERATOR_PIN, RELAY_ON);
+    aeratorState = DEVICE_ON;
+  } else {
+    digitalWrite(AERATOR_PIN, RELAY_OFF);
+    aeratorState = DEVICE_OFF;
   }
 }
 
@@ -145,35 +193,71 @@ void sendJson(float temp, float ph, float doMgL, bool tempOk, bool phOk, bool do
 {
   Serial.print("{");
 
+  // sensors object
+  Serial.print("\"sensors\": {");
+
   // temp
+  Serial.print("\"temp\": ");
   if (tempOk) {
-    Serial.print("\"temp\": ");
     Serial.print(temp, 2);
   } else {
-    Serial.print("\"temp\": null");
+    Serial.print("null");
   }
 
   Serial.print(", ");
 
-  // pH
-  if (phOk) {
-    Serial.print("\"ph\": ");
-    Serial.print(ph, 2);
-  } else {
-    Serial.print("\"ph\": null");
-  }
-
-  Serial.print(", ");
-
-  // DO
+  // do
+  Serial.print("\"do\": ");
   if (doOk) {
-    Serial.print("\"do\": ");
     Serial.print(doMgL, 2);
   } else {
-    Serial.print("\"do\": null");
+    Serial.print("null");
   }
 
+  Serial.print(", ");
+
+  // ph
+  Serial.print("\"ph\": ");
+  if (phOk) {
+    Serial.print(ph, 2);
+  } else {
+    Serial.print("null");
+  }
+
+  Serial.print("}, ");
+
+  // devices object
+  Serial.print("\"devices\": {");
+
+  Serial.print("\"heater\": ");
+  Serial.print(heaterState);
+
+  Serial.print(", ");
+
+  Serial.print("\"cooler\": ");
+  Serial.print(coolerState);
+
+  Serial.print(", ");
+
+  Serial.print("\"aerator\": ");
+  Serial.print(aeratorState);
+
+  Serial.print("}");
+
   Serial.println("}");
+}
+
+
+void readFromPiAndPrint()
+{
+  if (Serial.available() > 0) {
+    String msg = Serial.readStringUntil('\n'); // read full line
+    msg.trim();
+    if (msg.length() > 0) {
+      Serial.print("[Arduino] Received from Pi: ");
+      Serial.println(msg);
+    }
+  }
 }
 
 // -------------------- Arduino setup/loop --------------------
@@ -204,8 +288,15 @@ void setup()
     Serial.println("ERROR: No DS18B20 sensors found");
   }
 
+  // heater
   pinMode(HEATER_PIN, OUTPUT);
   digitalWrite(HEATER_PIN, RELAY_OFF);
+  // cooler
+  pinMode(COOLER_PIN, OUTPUT);
+  digitalWrite(COOLER_PIN, RELAY_OFF);
+  // cooler pump
+  pinMode(COOLER_PUMP_PIN, OUTPUT);
+  digitalWrite(COOLER_PUMP_PIN, RELAY_OFF);
 
   pinMode(PH_PIN, INPUT);
   pinMode(DO_PIN, INPUT);
@@ -213,6 +304,9 @@ void setup()
 
 void loop()
 {
+  // always check incoming serial data from Pi
+  readFromPiAndPrint();
+
   if (!sensorFound) {
     Serial.println("{\"error\": \"DS18B20 not found\"}");
     delay(2000);
@@ -230,6 +324,19 @@ void loop()
 
     // Temp
     bool tempOk = readTemperature(temp);
+    if (tempOk) {
+      if (temp < TEMP_MIN && heaterState == DEVICE_OFF) {
+        controlHeater(1); // ON
+      } else if (temp >= OPT_TEMP && heaterState == DEVICE_ON) {
+        controlHeater(0); // OFF
+      }
+
+      if (temp > TEMP_MAX && coolerState == DEVICE_OFF) {
+        controlCooler(1); // ON
+      } else if (temp <= OPT_TEMP && coolerState == DEVICE_ON) {
+        controlCooler(0); // OFF
+      }
+    }
 
     // pH
     ph = readPH();
@@ -239,6 +346,15 @@ void loop()
     uint8_t doTempC = tempOk ? (uint8_t)round(temp) : (uint8_t)25;
     doMgL = readDissolvedOxygenMgL(doTempC);
     bool doOk = !isnan(doMgL);
+
+    if (doOk) {
+      // Aerator control based on DO levels
+      if (doMgL < DO_MIN && aeratorState == DEVICE_OFF) {
+        controlAerator(1); // ON
+      } else if (doMgL >= OPT_DO && aeratorState == DEVICE_ON) {
+        controlAerator(0); // OFF
+      }
+    }
 
     sendJson(temp, ph, doMgL, tempOk, phOk, doOk);
   }

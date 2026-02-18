@@ -100,14 +100,6 @@ export default function AdminDashboardScreen() {
       count: null,
     },
     {
-      title: 'System Logs',
-      description: 'View system activity and logs',
-      icon: 'document-text',
-      color: '#FF9800',
-      link: '/admin/logs',
-      count: null,
-    },
-    {
       title: 'Settings',
       description: 'Configure system settings',
       icon: 'settings',

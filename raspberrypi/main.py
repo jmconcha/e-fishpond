@@ -36,8 +36,8 @@ cred = credentials.Certificate("./service_account_key.json")
 # Initialize app
 firebase_admin.initialize_app(
     cred,
-    # {"databaseURL": "https://e-fishpond-default-rtdb.asia-southeast1.firebasedatabase.app/"},
-    {"databaseURL": "http://192.168.1.23:9000/?ns=e-fishpond"}, # local emulator URL
+    {"databaseURL": "https://e-fishpond-default-rtdb.asia-southeast1.firebasedatabase.app/"}, # production URL
+    # {"databaseURL": "http://192.168.1.23:9000/?ns=e-fishpond"}, # local emulator URL
 )
 
 # Global cache for schedules
@@ -49,6 +49,9 @@ opt_ranges_cache = {
     "do": None,
     "temp": None,
 }
+
+WINDOW_MINUTES = 1  # range to consider "equal" to schedule time
+SCHEDULE_REFRESH_SECONDS = 10  # how often to refresh schedules from Firebase
 
 
 def connect_arduino():
@@ -81,7 +84,17 @@ def parse_iso(iso_str: str) -> datetime | None:
         return None
 
 
-def compute_next_run(schedule: dict, now_utc: datetime | None = None) -> datetime | None:
+def is_within_minutes(target: datetime, now: datetime, minutes: int) -> tuple[bool, float]:
+    """
+    Returns (within_window, diff_seconds)
+    diff_seconds is (now - target). Negative means target is in the future.
+    """
+    diff = (now - target).total_seconds()
+    within = abs(diff) <= (minutes * 60)
+    return within, diff
+
+
+def compute_next_run(schedule: dict, now_utc: datetime) -> datetime | None:
     if not schedule or schedule.get("enabled") is False:
         return None
 
@@ -90,15 +103,59 @@ def compute_next_run(schedule: dict, now_utc: datetime | None = None) -> datetim
         return None
 
     repeat_daily = bool(schedule.get("repeat_daily", False))
-    now_utc = now_utc or datetime.now(timezone.utc)
 
     if not repeat_daily:
         return run_at if run_at > now_utc else None
 
-    next_dt = now_utc.replace(hour=run_at.hour, minute=run_at.minute, second=0, microsecond=0)
+    # daily schedule: run at the same HH:MM every day
+    next_dt = now_utc.replace(
+        hour=run_at.hour, minute=run_at.minute, second=0, microsecond=0
+    )
     if next_dt <= now_utc:
         next_dt += timedelta(days=1)
+
     return next_dt
+
+
+def get_next_cleaning_schedule(cleaning_schedules: dict) -> tuple[str, dict, datetime] | None:
+    now_utc = datetime.now(timezone.utc)
+    best = None  # (next_run, id, schedule)
+
+    for schedule_id, s in cleaning_schedules.items():
+        next_run = compute_next_run(s, now_utc)
+        if next_run is None:
+            continue
+        if best is None or next_run < best[0]:
+            best = (next_run, schedule_id, s)
+
+    if best is None:
+        return None
+
+    next_run, schedule_id, schedule = best
+    return schedule_id, schedule, next_run
+
+
+def is_cleaning_time_now(next_run_utc: datetime, window_minutes: int = 0) -> bool:
+    """
+    Compare next cleaning schedule with current UTC time.
+
+    Args:
+        next_run_utc (datetime): schedule time in UTC (must be timezone-aware)
+        window_minutes (int): allowed range before and after schedule
+
+    Returns:
+        bool: True if current UTC time is within range, False otherwise
+    """
+
+    if next_run_utc is None:
+        return False
+
+    now_utc = datetime.now(timezone.utc)
+
+    start_range = next_run_utc - timedelta(minutes=window_minutes)
+    end_range = next_run_utc + timedelta(minutes=window_minutes)
+
+    return start_range <= now_utc <= end_range
 
 
 # -----------------------------
@@ -186,6 +243,15 @@ def send_opt_ranges_to_arduino(ser: serial.Serial, do_range: dict | None, temp_r
         print("[Arduino] Sent optimal ranges")
     except Exception as e:
         print(f"[Arduino] Failed to send optimal ranges: {e}")
+
+
+def send_device_control(ser, name: str, value: int):
+    # t = type, n = device name, v = value
+    # dc = device control, a = aerator, h = heater, co = cooler, cl = cleaner
+    message = f"t=dc,n={name},v={int(value)}\n"
+    ser.write(message.encode("utf-8"))
+    ser.flush()
+    print("Sent:", message.strip())
 
 
 def fetch_and_send_opt_ranges_once(ser: serial.Serial | None):
@@ -327,7 +393,6 @@ def main():
     refresh_cleaning_schedules_cache()
     fetch_and_send_opt_ranges_once(ser)
 
-    SCHEDULE_REFRESH_SECONDS = 10
     last_schedule_refresh = time.time()
 
     try:
@@ -337,6 +402,22 @@ def main():
             if now - last_schedule_refresh >= SCHEDULE_REFRESH_SECONDS:
                 refresh_feeding_schedules_cache()
                 refresh_cleaning_schedules_cache()
+
+                next_cleaning_schedule = get_next_cleaning_schedule(cleaning_schedules_cache)
+                if next_cleaning_schedule is None:
+                    print("No upcoming cleaning schedule (all disabled or already passed).")
+                    continue
+
+                schedule_id, schedule, next_run = next_cleaning_schedule
+
+                if is_cleaning_time_now(next_run, WINDOW_MINUTES):
+                    print("Cleaning should run now")
+                    send_device_control(ser, "cl", 1)
+                else:
+                    print("Not cleaning time")
+
+                # send_device_control(ser, "h", 1)
+
                 last_schedule_refresh = now
 
             if ser.in_waiting:
@@ -349,6 +430,7 @@ def main():
     except KeyboardInterrupt:
         print("\nShutting down...")
         try:
+
             ser.close()
         except Exception:
             pass

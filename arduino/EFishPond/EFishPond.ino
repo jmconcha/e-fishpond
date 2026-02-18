@@ -2,15 +2,18 @@
 #include <DallasTemperature.h>
 #include <Wire.h>
 #include <Arduino.h>
+#include <ArduinoJson.h>
 
 // -------------------- Pin definitions --------------------
 #define ONE_WIRE_BUS 2
 #define RELAY_OFF HIGH
 #define RELAY_ON  LOW
 #define HEATER_PIN 8
-#define COOLER_PIN 11
-#define COOLER_PUMP_PIN 10
 #define AERATOR_PIN 9
+#define COOLER_PUMP_PIN 10
+#define COOLER_PIN 11
+#define CLEANER_PIN 12
+#define FEEDER_PIN 13
 
 #define PH_PIN A0
 #define DO_PIN A1
@@ -20,12 +23,12 @@
 // -------------------- optimal water temperature range --------------------
 #define TEMP_MIN 28.0  // °C
 #define TEMP_MAX 32.0  // °C
-#define OPT_TEMP TEMP_MIN + ((TEMP_MAX - TEMP_MIN) / 2.0)
+#define OPT_TEMP (TEMP_MIN + ((TEMP_MAX - TEMP_MIN) / 2.0))
 
 // -------------------- optimal dissolved oxygen level range --------------------
 #define DO_MIN 5.0  // mg/L
 #define DO_MAX 8.0  // mg/L
-#define OPT_DO DO_MIN + ((DO_MAX - DO_MIN) / 2.0)
+#define OPT_DO (DO_MIN + ((DO_MAX - DO_MIN) / 2.0))
 
 // -------------------- devices power state --------------------
 // heater
@@ -36,6 +39,15 @@ int heaterState = DEVICE_OFF;
 int coolerState = DEVICE_OFF;
 // aerator
 int aeratorState = DEVICE_OFF;
+// cleaner
+int cleanerState = DEVICE_OFF;
+// feeder
+int feederState = DEVICE_OFF;
+
+// -------------------- Cleaner auto-off timer --------------------
+// const unsigned long CLEANER_RUN_DURATION_MS = 60UL * 60UL * 1000UL; // 1 hour
+bool cleanerTimedRunActive = false;
+unsigned long cleanerStartTime = 0;
 
 // -------------------- Send interval --------------------
 unsigned long lastSendTime = 0;
@@ -189,6 +201,50 @@ void controlAerator(int powerState)
   }
 }
 
+void handleCleanerAutoOff()
+{
+  if (!cleanerTimedRunActive) return;
+
+  unsigned long now = millis();
+
+  // handles millis() overflow safely
+  if ((unsigned long)(now - cleanerStartTime) >= CLEANER_RUN_DURATION_MS) {
+    controlCleaner(0);              // turn OFF
+    cleanerTimedRunActive = false;  // stop timer
+    Serial.println("[Cleaner] Auto-OFF after 1 hour");
+  }
+}
+
+void controlCleaner(int powerState)
+{
+  if (powerState == 1) {
+    digitalWrite(CLEANER_PIN, RELAY_ON);
+    cleanerState = DEVICE_ON;
+
+    // start/restart timer on ON
+    cleanerStartTime = millis();
+    cleanerTimedRunActive = true;
+
+  } else {
+    digitalWrite(CLEANER_PIN, RELAY_OFF);
+    cleanerState = DEVICE_OFF;
+
+    // cancel timer on OFF
+    cleanerTimedRunActive = false;
+  }
+}
+
+void controlFeeder(int powerState)
+{
+  if (powerState == 1) {
+    digitalWrite(FEEDER_PIN, RELAY_ON);
+    feederState = DEVICE_ON;
+  } else {
+    digitalWrite(FEEDER_PIN, RELAY_OFF);
+    feederState = DEVICE_OFF;
+  }
+}
+
 void sendJson(float temp, float ph, float doMgL, bool tempOk, bool phOk, bool doOk)
 {
   Serial.print("{");
@@ -247,15 +303,79 @@ void sendJson(float temp, float ph, float doMgL, bool tempOk, bool phOk, bool do
   Serial.println("}");
 }
 
-
 void readFromPiAndPrint()
 {
-  if (Serial.available() > 0) {
-    String msg = Serial.readStringUntil('\n'); // read full line
-    msg.trim();
-    if (msg.length() > 0) {
-      Serial.print("[Arduino] Received from Pi: ");
-      Serial.println(msg);
+  if (Serial.available() <= 0) return;
+
+  String msg = Serial.readStringUntil('\n');
+  msg.trim();
+  if (msg.length() == 0) return;
+
+  Serial.print("[Arduino] Raw received: ");
+  Serial.println(msg);
+
+  // Expected format: t=dc,n=h,v=1
+  String t = "";
+  String n = "";
+  int v = -1;
+
+  int start = 0;
+  while (start < msg.length())
+  {
+    int comma = msg.indexOf(',', start);
+    if (comma == -1) comma = msg.length();
+
+    String part = msg.substring(start, comma);
+    part.trim();
+
+    int eq = part.indexOf('=');
+    if (eq != -1)
+    {
+      String key = part.substring(0, eq);
+      String val = part.substring(eq + 1);
+      key.trim();
+      val.trim();
+
+      if (key == "t") t = val;
+      else if (key == "n") n = val;
+      else if (key == "v") v = val.toInt();
+    }
+
+    start = comma + 1;
+  }
+
+  Serial.print("t=");
+  Serial.println(t);
+  Serial.print("n=");
+  Serial.println(n);
+  Serial.print("v=");
+  Serial.println(v);
+
+  // Handle device control
+  if (t == "dc")
+  {
+    if (n == "h") {
+      Serial.println(v == 1 ? "Turning heater ON" : "Turning heater OFF");
+      controlHeater(v == 1 ? 1 : 0);
+    }
+    else if (n == "co") {
+      Serial.println(v == 1 ? "Turning cooler ON" : "Turning cooler OFF");
+      controlCooler(v == 1 ? 1 : 0);
+    }
+    else if (n == "a") {
+      Serial.println(v == 1 ? "Turning aerator ON" : "Turning aerator OFF");
+      controlAerator(v == 1 ? 1 : 0);
+    }
+    else if (n == "cl") {
+      Serial.println(v == 1 ? "Turning cleaner ON" : "Turning cleaner OFF");
+      controlCleaner(v == 1 ? 1 : 0);
+    }
+    else if (n == "f") {
+      Serial.println(v == 1 ? "Turning feeder ON" : "Turning feeder OFF");
+      controlFeeder(v == 1 ? 1 : 0);
+    }
+    else {
+      Serial.println("Unknown device name");
     }
   }
 }
@@ -297,6 +417,12 @@ void setup()
   // cooler pump
   pinMode(COOLER_PUMP_PIN, OUTPUT);
   digitalWrite(COOLER_PUMP_PIN, RELAY_OFF);
+  // aerator
+  pinMode(AERATOR_PIN, OUTPUT);
+  digitalWrite(AERATOR_PIN, RELAY_OFF);
+  // cleaner
+  pinMode(CLEANER_PIN, OUTPUT);
+  digitalWrite(CLEANER_PIN, RELAY_OFF);
 
   pinMode(PH_PIN, INPUT);
   pinMode(DO_PIN, INPUT);
@@ -306,6 +432,9 @@ void loop()
 {
   // always check incoming serial data from Pi
   readFromPiAndPrint();
+
+  // always check if cleaner needs to be turned off due to auto-off timer
+  handleCleanerAutoOff();
 
   if (!sensorFound) {
     Serial.println("{\"error\": \"DS18B20 not found\"}");

@@ -45,7 +45,7 @@ int cleanerState = DEVICE_OFF;
 int feederState = DEVICE_OFF;
 
 // -------------------- Cleaner auto-off timer --------------------
-// const unsigned long CLEANER_RUN_DURATION_MS = 60UL * 60UL * 1000UL; // 1 hour
+const unsigned long CLEANER_RUN_DURATION_MS = 60UL * 60UL * 1000UL; // 1 hour
 bool cleanerTimedRunActive = false;
 unsigned long cleanerStartTime = 0;
 

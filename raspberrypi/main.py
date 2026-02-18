@@ -380,6 +380,34 @@ def process_sensor_data(line: str) -> bool:
         return False
 
 
+def sync_device_power_state(
+    ser: serial.Serial,
+    device_path: str,
+    device_code: str,
+    last_sent: dict,
+):
+    try:
+        data = db.reference(device_path).get() or {}
+        desired = (data.get("power_state") or "").strip().lower()
+
+        # Only accept "on" or "off"
+        if desired not in ("on", "off"):
+            return
+
+        desired_value = 1 if desired == "on" else 0
+
+        cache_key = f"{device_path}:{device_code}"
+        prev_value = last_sent.get(cache_key)
+
+        # Send only if changed
+        if prev_value is None or prev_value != desired_value:
+            send_device_control(ser, device_code, desired_value)
+            last_sent[cache_key] = desired_value
+
+    except Exception as e:
+        print(f"[Device Sync] Failed for {device_path}: {e}")
+
+
 def main():
     ser = connect_arduino()
     if ser is None:
@@ -394,6 +422,7 @@ def main():
     fetch_and_send_opt_ranges_once(ser)
 
     last_schedule_refresh = time.time()
+    last_device_sent = {}
 
     try:
         while True:
@@ -416,7 +445,12 @@ def main():
                 else:
                     print("Not cleaning time")
 
-                # send_device_control(ser, "h", 1)
+                // device control; admin feature
+                sync_device_power_state(ser, "/devices/heater", "h", last_device_sent)
+                sync_device_power_state(ser, "/devices/cooler", "co", last_device_sent)
+                sync_device_power_state(ser, "/devices/aerator", "a", last_device_sent)
+                sync_device_power_state(ser, "/devices/cleaner", "cl", last_device_sent)
+                sync_device_power_state(ser, "/devices/feeder", "f", last_device_sent)
 
                 last_schedule_refresh = now
 
